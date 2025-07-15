@@ -11,7 +11,7 @@ const UserSchema = new Schema<TUser>(
     email: { type: String, required: true },
     password: { type: String, required: true },
     confirmPassword: { type: String, required: false },
-    agreedToTerms: { type: Boolean, required: true }, // Fixed typo
+    agreedToTerms: { type: Boolean, required: true },
     role: { type: String, enum: ['admin', 'user'], default: userRole.user },
     allowPasswordChange: { type: Boolean, required: true, default: false },
     sentOTP: { type: String, required: false }, // Made optional
@@ -61,7 +61,7 @@ const ProfileSchema = new Schema<TProfile>(
 );
 
 UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next(); // Hash only if password is modified
+  if (!this.isModified('password')) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
