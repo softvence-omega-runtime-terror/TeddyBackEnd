@@ -18,7 +18,7 @@ app.use(
 );
 
 app.get('/', (req, res) => {
-  res.send('Welcome to Day Moon Designs server..!');
+  res.send('Welcome to Teddy server..!');
 });
 
 // Routes
