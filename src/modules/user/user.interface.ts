@@ -32,7 +32,10 @@ export type TProfile = {
   email: string;
   monthStart?: Date;
   monthEnd?: Date;
+  totalCreatedGroups?:number;
   assistantType : "Supportive_Friendly" | "SarcasticTruth-Teller";
+  plan_id:Types.ObjectId;
+  planPurchaseDate?:Date;
   img?: string;
   emailNotification: boolean;
   user_id: Types.ObjectId;

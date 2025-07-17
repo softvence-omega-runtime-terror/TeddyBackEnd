@@ -28,36 +28,30 @@ const UserSchema = new Schema<TUser>(
 
 const ProfileSchema = new Schema<TProfile>(
   {
-    name: { type: String, required: false },
+    name: { type: String, required: true },
     phone: { type: String, required: false },
     email: { type: String, required: true },
     monthStart: { type: Date, required: false },
     monthEnd: { type: Date, required: false },
+    totalCreatedGroups: { type: Number, required: false, default: 0 },
     assistantType: {
       type: String,
       enum: ['Supportive_Friendly', 'SarcasticTruth-Teller'],
       default: 'Supportive_Friendly',
     },
+    plan_id: { type: Schema.Types.ObjectId, required: true, ref: 'Plan' },
+    planPurchaseDate: { type: Date, required: false },
     img: {
       type: String,
       required: false,
-      default:
-        'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
+      default: 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
     },
-
-    user_id: {
-      type: Schema.Types.ObjectId,
-      required: true,
-      ref: 'UserCollection',
-    },
-    notificationList_id: {
-      type: Schema.Types.ObjectId,
-      required: false,
-      ref: 'NotificationList',
-    },
+    emailNotification: { type: Boolean, required: true, default: false },
+    user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' },
+    notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
     isDeleted: { type: Boolean, required: false, default: false },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 UserSchema.pre('save', async function (next) {
