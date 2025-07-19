@@ -28,27 +28,32 @@ const UserSchema = new Schema<TUser>(
 
 const ProfileSchema = new Schema<TProfile>(
   {
+    user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' },
     name: { type: String, required: true },
     phone: { type: String, required: false },
     email: { type: String, required: true },
+       img: {
+      type: String,
+      required: false,
+      default: 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
+    },
     monthStart: { type: Date, required: false },
     monthEnd: { type: Date, required: false },
-    totalCreatedGroups: { type: Number, required: false, default: 0 },
+    aiChatCount:{ type: Number, required: false, default: 100 },
+    totalCreatedGroups: { type: Number, required: false, default: 3 },
+
+
     assistantType: {
       type: String,
       enum: ['Supportive_Friendly', 'SarcasticTruth-Teller'],
       default: 'Supportive_Friendly',
     },
-    plan_id: { type: Schema.Types.ObjectId, required: true, ref: 'Plan' },
+    plan_id: { type: Schema.Types.ObjectId, required:false, ref: 'Plan' },
     planPurchaseDate: { type: Date, required: false },
-    img: {
-      type: String,
-      required: false,
-      default: 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
-    },
+ 
     emailNotification: { type: Boolean, required: true, default: false },
-    user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' },
     notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
+    chatList_id:{ type: Schema.Types.ObjectId, required: false, ref: 'ChatCollectionList' },
     isDeleted: { type: Boolean, required: false, default: false },
   },
   { timestamps: true }

@@ -13,6 +13,11 @@ const createUser = async (
   file?: any,
   method?: string,
 ) => {
+
+
+  console.log("here is the payload",payload)
+
+
   // Validate password match
   if (payload.password !== payload.confirmPassword) {
     throw new Error('Password and confirm password do not match.');
