@@ -2,6 +2,8 @@ import express from 'express';
 import authRouter from '../modules/auth/auth.routes';
 import userRoutes from '../modules/user/user.routes';
 import messageRouter from '../modules/message/message.routes';
+import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpence.route';
+
 
 const Routes = express.Router();
 // Array of module routes
@@ -17,6 +19,10 @@ const moduleRouts = [
   {
     path: '/message',
     router: messageRouter,
+  },
+  {
+    path: '/incomeAndExpences',
+    router: incomeAndExpenseRouter,
   },
 ];
 
