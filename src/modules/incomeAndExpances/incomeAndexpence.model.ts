@@ -1,20 +1,38 @@
 import { Schema, Types, model, Document } from 'mongoose';
 
-// Type for the Transaction document
-type TransactionDocument = Document & {
-  transactionType: 'expense' | 'income';
-  curacy: string;
-  date: string;
-  amount: number;
-  distribution_type: 'equal' | 'custom';
-  description?: string;
-  type_id: Types.ObjectId;
-  user_id: Types.ObjectId;
-  isGroupTransaction: boolean;
-  group_id?: Types.ObjectId;
-  spender_id?: Types.ObjectId;
-  earnedBy_id?: Types.ObjectId;
-};
+// Type for the Transaction document (union of TExpense and TIncome)
+type TransactionDocument = Document & (
+  | {
+      transactionType: 'expense';
+      currency: string;
+      date: string;
+      amount: number;
+      distribution_type: 'equal' | 'custom' | null;
+      description?: string;
+      type_id: Types.ObjectId;
+      user_id: Types.ObjectId;
+      isGroupTransaction: boolean;
+      group_id?: Types.ObjectId;
+      spender_id_Or_Email: Types.ObjectId | string;
+      earnedBy_id_Or_Email?: never;
+      typeModel: 'PersonalExpenseTypes';
+    }
+  | {
+      transactionType: 'income';
+      currency: string;
+      date: string;
+      amount: number;
+      distribution_type: 'equal' | 'custom' | null;
+      description: string;
+      type_id: Types.ObjectId;
+      user_id: Types.ObjectId;
+      isGroupTransaction: boolean;
+      group_id?: Types.ObjectId;
+      spender_id_Or_Email?: never;
+      earnedBy_id_Or_Email: Types.ObjectId | string;
+      typeModel: 'PersonalIncomeTypes';
+    }
+);
 
 // Expense Group Schema
 const expenseGroupSchema = new Schema(
@@ -33,12 +51,9 @@ const expenseGroupSchema = new Schema(
       type: [
         {
           email: { type: String, required: true },
+          member_id: { type: Schema.Types.ObjectId, ref: 'UserCollection', required: false },
           existOnPlatform: { type: Boolean, required: false, default: false },
-          isInvitationEmailSent: {
-            type: Boolean,
-            required: false,
-            default: false,
-          },
+          isInvitationEmailSent: { type: Boolean, required: false, default: false },
           name: { type: String, required: false },
         },
       ],
@@ -101,9 +116,9 @@ const transactionSchema = new Schema<TransactionDocument>(
       enum: ['expense', 'income'],
       required: true,
     },
-    curacy: { 
+    currency: {
       type: String,
-      required: true
+      required: true,
     },
     date: {
       type: String,
@@ -113,13 +128,20 @@ const transactionSchema = new Schema<TransactionDocument>(
       type: Number,
       required: true,
     },
+    distribution_type: {
+      type: String,
+      enum: ['equal', 'custom', null],
+      required: false,
+    },
     description: {
       type: String,
-      required: true
+      required: function (this: TransactionDocument) {
+        return this.transactionType === 'income';
+      },
     },
     type_id: {
       type: Schema.Types.ObjectId,
-      refPath: 'transactionType', // Dynamically reference PersonalExpenseTypes or PersonalIncomeTypes
+      refPath: 'typeModel',
       required: true,
     },
     user_id: {
@@ -127,8 +149,6 @@ const transactionSchema = new Schema<TransactionDocument>(
       ref: 'UserCollection',
       required: true,
     },
-
-
     isGroupTransaction: {
       type: Boolean,
       required: true,
@@ -137,49 +157,51 @@ const transactionSchema = new Schema<TransactionDocument>(
     group_id: {
       type: Schema.Types.ObjectId,
       ref: 'ExpenseGroup',
-      required: false,
+      required: function (this: TransactionDocument) {
+        return this.isGroupTransaction === true;
+      },
     },
-    distribution_type: {
+    spender_id_Or_Email: {
+      type: Schema.Types.Mixed,
+      required: function (this: TransactionDocument) {
+        return this.transactionType === 'expense';
+      },
+    },
+    earnedBy_id_Or_Email: {
+      type: Schema.Types.Mixed,
+      required: function (this: TransactionDocument) {
+        return this.transactionType === 'income';
+      },
+    },
+    typeModel: {
       type: String,
-      enum: ['equal', 'custom'],
-      required: false,
-    },
-
-
-
-    spender_id: {
-      type: Schema.Types.ObjectId,
-      ref: 'UserCollection',
-      required: function (this: TransactionDocument) {
-        return this.transactionType === 'expense'; // Required for expenses
-      },
-    },
-    earnedBy_id: {
-      type: Schema.Types.ObjectId,
-      ref: 'UserCollection',
-      required: function (this: TransactionDocument) {
-        return this.transactionType === 'income'; // Required for incomes
-      },
+      enum: ['PersonalExpenseTypes', 'PersonalIncomeTypes'],
+      required: true,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
+
+// Pre-save hook to set typeModel based on transactionType
+transactionSchema.pre('save', function (next) {
+  if (this.transactionType === 'expense') {
+    this.typeModel = 'PersonalExpenseTypes';
+  } else if (this.transactionType === 'income') {
+    this.typeModel = 'PersonalIncomeTypes';
+  }
+  next();
+});
 
 // Create and export models
 export const ExpenseGroupModel = model('ExpenseGroup', expenseGroupSchema);
-export const ExpenseTypesModel = model(
-  'PersonalExpenseTypes',
-  personalExpenseTypesSchema,
-);
-export const IncomeTypesModel = model(
-  'PersonalIncomeTypes',
-  personalIncomeTypesSchema,
-);
-export const ExpenseModel = model<TransactionDocument>(
-  'Expense',
-  transactionSchema,
-);
-export const IncomeModel = model<TransactionDocument>(
-  'Income',
-  transactionSchema,
-);
+export const ExpenseTypesModel = model('PersonalExpenseTypes', personalExpenseTypesSchema);
+export const IncomeTypesModel = model('PersonalIncomeTypes', personalIncomeTypesSchema);
+export const TransactionModel = model<TransactionDocument>('Transaction', transactionSchema);
+
+// C7-07232025
+
+// ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKrcGxEgsvHvsJoETpmrhVnXvoddDiJQIyfAJq0NFyJ8 habibrifatx21@gmail.com

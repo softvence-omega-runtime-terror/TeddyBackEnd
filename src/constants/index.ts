@@ -5,7 +5,7 @@ export const userRole = {
   admin: 'admin',
 } as const;
 
- export const transactionType = {
+ export const transactionTypeConst = {
   'expense':'expense',
   'income':'income'
 } as const

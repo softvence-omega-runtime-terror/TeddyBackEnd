@@ -1,8 +1,11 @@
 import { Types } from 'mongoose';
-import { ExpenseTypesModel, IncomeTypesModel } from './incomeAndexpence.model';
+import { ExpenseTypesModel, IncomeTypesModel, TransactionModel, ExpenseGroupModel } from './incomeAndexpence.model';
 import { uploadImgToCloudinary } from '../../util/uploadImgToCludinary';
+import { transactionTypeConst } from '../../constants';
+import idConverter from '../../util/idConverter';
+import { TExpense, TIncome } from './incomeAndexpence.interface';
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Subdocument Interfaces for Service
 interface IncomeTypeSubdocument {
   img?: string | null;
   name: string;
@@ -23,8 +26,6 @@ interface ExpenseTypesDocument extends Document {
   expenseTypeList: Types.DocumentArray<ExpenseTypeSubdocument>;
 }
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 const createIncomeType = async (
   payload: any,
   user_id: Types.ObjectId | null = null,
@@ -36,7 +37,7 @@ const createIncomeType = async (
     // Validate payload
     const { name } = payload;
     if (!name) {
-      throw new Error('Expense type name is required');
+      throw new Error('Income type name is required');
     }
 
     // Handle single file upload to Cloudinary
@@ -47,7 +48,7 @@ const createIncomeType = async (
       imageUrl = uploadResult.secure_url;
     }
 
-    // Prepare new expense type object
+    // Prepare new income type object
     const newIncomeType: IncomeTypeSubdocument = {
       img: imageUrl,
       name,
@@ -67,10 +68,10 @@ const createIncomeType = async (
       );
 
       if (isDuplicate) {
-        throw new Error(`Expense type '${payload.name}' already exists`);
+        throw new Error(`Income type '${payload.name}' already exists`);
       }
 
-      // Update existing document by pushing new expense type and return updated document
+      // Update existing document by pushing new income type and return updated document
       const updatedIncomeTypes = await IncomeTypesModel.findOneAndUpdate(
         query,
         { $push: { incomeTypeList: newIncomeType } },
@@ -79,7 +80,7 @@ const createIncomeType = async (
 
       return updatedIncomeTypes;
     } else {
-      // Create new document with the expense type
+      // Create new document with the income type
       const newIncomeTypes = await IncomeTypesModel.create({
         user_id,
         incomeTypeList: [newIncomeType],
@@ -88,9 +89,10 @@ const createIncomeType = async (
     }
   } catch (error: any) {
     console.error('Error in createIncomeType service:', error.message);
-    throw new Error(`Failed to create expense type: ${error.message}`);
+    throw new Error(`Failed to create income type: ${error.message}`);
   }
 };
+
 const getAllIncomeType = async (user_id: Types.ObjectId) => {
   try {
     // Find user-specific income types
@@ -114,7 +116,7 @@ const getAllIncomeType = async (user_id: Types.ObjectId) => {
 
     return result;
   } catch (error: any) {
-    console.error('Error in findAllIncomeType service:', error.message);
+    console.error('Error in getAllIncomeType service:', error.message);
     throw new Error(`Failed to fetch income types: ${error.message}`);
   }
 };
@@ -181,99 +183,253 @@ const createExpensesType = async (
       return newExpenseTypes;
     }
   } catch (error: any) {
-    console.error('Error in createExpenseType service:', error.message);
+    console.error('Error in createExpensesType service:', error.message);
     throw new Error(`Failed to create expense type: ${error.message}`);
   }
 };
+
 const getAllExpensesType = async (user_id: Types.ObjectId) => {
   try {
-    // Find user-specific income types
-    const userIncomeTypes = await ExpenseTypesModel.findOne({ user_id });
+    // Find user-specific expense types
+    const userExpenseTypes = await ExpenseTypesModel.findOne({ user_id });
 
-    // Find common income types (where user_id is null)
-    const commonIncomeTypes = await ExpenseTypesModel.findOne({
+    // Find common expense types (where user_id is null)
+    const commonExpenseTypes = await ExpenseTypesModel.findOne({
       user_id: null,
     });
 
     // Initialize result array
     const result = [];
 
-    // Add user-specific income types to the top of the result array
-    if (userIncomeTypes && userIncomeTypes.expenseTypeList) {
-      result.push(...userIncomeTypes.expenseTypeList);
+    // Add user-specific expense types to the top of the result array
+    if (userExpenseTypes && userExpenseTypes.expenseTypeList) {
+      result.push(...userExpenseTypes.expenseTypeList);
     }
 
-    // Add common income types to the bottom of the result array
-    if (commonIncomeTypes && commonIncomeTypes.expenseTypeList) {
-      result.push(...commonIncomeTypes.expenseTypeList);
+    // Add common expense types to the bottom of the result array
+    if (commonExpenseTypes && commonExpenseTypes.expenseTypeList) {
+      result.push(...commonExpenseTypes.expenseTypeList);
     }
 
     return result;
   } catch (error: any) {
-    console.error('Error in findAllIncomeType service:', error.message);
-    throw new Error(`Failed to fetch income types: ${error.message}`);
+    console.error('Error in getAllExpensesType service:', error.message);
+    throw new Error(`Failed to fetch expense types: ${error.message}`);
   }
 };
 
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   if (!user_id) {
-    throw new Error('there must be user_id to add income or expenses');
+    throw new Error('User ID is required to add income or expenses');
   }
 
-  const {
+  let {
     transactionType,
-    curacy,
+    currency,
     date,
     amount,
     distribution_type,
     description,
     type_id,
     isGroupTransaction,
+    group_id,
     distributionAmong,
   } = payload;
 
-  if (
-    !transactionType ||
-    !curacy ||
-    !date ||
-    !amount ||
-    !type_id ||
-    !description
-  ) {
+  // Validate required fields (description optional for expenses)
+  if (!transactionType || !currency || !date || !type_id) {
     throw new Error(
-      'transactionType & curacy & date & amount & type_id & description is required',
+      'transactionType, currency, date, and type_id are required',
     );
   }
 
-  //===========================
+  if (transactionType === transactionTypeConst.income && !description) {
+    throw new Error('description is required for income transactions');
+  }
 
-  if (isGroupTransaction) {
-    //if it is a group transaction
-    if (
-      !distribution_type ||
-      !distributionAmong ||
-      distributionAmong.length < 0
-    ) {
-      throw new Error(
-        'in group transaction distribution_type & distributionAmong is required',
+  // Validate type_id existence
+  const Model =
+    transactionType === transactionTypeConst.expense
+      ? ExpenseTypesModel
+      : IncomeTypesModel;
+  const listField =
+    transactionType === transactionTypeConst.expense
+      ? 'expenseTypeList'
+      : 'incomeTypeList';
+
+  const isTypeExist = await Model.findOne({
+    user_id: { $in: [user_id, null] },
+    [`${listField}._id`]: idConverter(type_id),
+  });
+
+  if (!isTypeExist) {
+    throw new Error(
+      `Type with id ${type_id} does not exist for user ${user_id}`,
+    );
+  }
+
+  // Prepare transactions
+  const transactions: Array<TExpense | TIncome> = [];
+
+  if (!isGroupTransaction) {
+    // Personal transaction: use user_id for spender_id_Or_Email or earnedBy_id_Or_Email
+    if (!amount) {
+      throw new Error('amount is required for non-group transactions');
+    }
+    const transactionData: TExpense | TIncome = {
+      transactionType,
+      currency,
+      date,
+      amount,
+      distribution_type: null,
+      description,
+      type_id: idConverter(type_id) as Types.ObjectId,
+      user_id,
+      isGroupTransaction: false,
+      group_id: null,
+      typeModel:
+        transactionType === transactionTypeConst.expense
+          ? 'PersonalExpenseTypes'
+          : 'PersonalIncomeTypes',
+      spender_id_Or_Email: transactionType === transactionTypeConst.expense ? user_id : null,
+      earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? user_id : null,
+    };
+    transactions.push(transactionData);
+  } else {
+    // Group transaction: validate group and create transactions for each member
+    if (!group_id) {
+      throw new Error('group_id is required for group transactions');
+    }
+    if (!distribution_type) {
+      throw new Error('distribution_type is required for group transactions');
+    }
+
+    const group = await ExpenseGroupModel.findOne({
+      _id: idConverter(group_id),
+      groupType: transactionType,
+    });
+
+    if (!group) {
+      throw new Error(`Group with id ${group_id} does not exist or does not match transaction type`);
+    }
+
+    let membersToDistribute: Array<{ memberEmail: string; amount?: number }> = [];
+
+    if (distribution_type === 'equal') {
+      if (!amount) {
+        throw new Error('amount is required for equal distribution');
+      }
+      // If distributionAmong is not provided or empty, use all group members
+      if (!distributionAmong || distributionAmong.length === 0) {
+        membersToDistribute = group.groupMemberList.map((member) => ({
+          memberEmail: member.email,
+        }));
+      } else {
+        // Validate provided memberEmails
+        const groupMemberEmails = group.groupMemberList.map((member) => member.email);
+        const invalidEmails = distributionAmong.filter(
+          (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
+        );
+        if (invalidEmails.length > 0) {
+          throw new Error(
+            `Invalid member emails in distributionAmong: ${invalidEmails
+              .map((m: { memberEmail: string }) => m.memberEmail)
+              .join(', ')}`,
+          );
+        }
+        membersToDistribute = distributionAmong.map((member: { memberEmail: string }) => ({
+          memberEmail: member.memberEmail,
+        }));
+      }
+      // Calculate equal amount per member
+      const amountPerMember = amount / membersToDistribute.length;
+      membersToDistribute = membersToDistribute.map((member) => ({
+        ...member,
+        amount: amountPerMember,
+      }));
+    } else if (distribution_type === 'custom') {
+      // Require distributionAmong with spentAmount
+      if (!distributionAmong || distributionAmong.length === 0) {
+        throw new Error('distributionAmong with spentAmount is required for custom distribution');
+      }
+      // Validate spentAmount and memberEmails
+      for (const member of distributionAmong) {
+        if (!member.memberEmail) {
+          throw new Error('memberEmail is required for each member in distributionAmong');
+        }
+        if (typeof member.spentAmount !== 'number' || member.spentAmount < 0) {
+          throw new Error(`Invalid or missing spentAmount for member ${member.memberEmail}`);
+        }
+      }
+      const groupMemberEmails = group.groupMemberList.map((member) => member.email);
+      const invalidEmails = distributionAmong.filter(
+        (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
       );
+      if (invalidEmails.length > 0) {
+        throw new Error(
+          `Invalid member emails in distributionAmong: ${invalidEmails
+            .map((m: { memberEmail: string }) => m.memberEmail)
+            .join(', ')}`,
+        );
+      }
+      // Calculate total amount if not provided
+      if (!amount) {
+        amount = distributionAmong.reduce(
+          (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
+          0,
+        );
+      } else {
+        // Validate total spentAmount matches provided amount
+        const totalSpentAmount = distributionAmong.reduce(
+          (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
+          0,
+        );
+        if (totalSpentAmount !== amount) {
+          throw new Error(
+            `Total spentAmount (${totalSpentAmount}) does not match transaction amount (${amount})`,
+          );
+        }
+      }
+      membersToDistribute = distributionAmong.map((member: { memberEmail: string; spentAmount: number }) => ({
+        memberEmail: member.memberEmail,
+        amount: member.spentAmount,
+      }));
+    } else {
+      throw new Error('Invalid distribution_type: must be "equal" or "custom"');
+    }
+
+    // Create a transaction for each member
+    for (const member of membersToDistribute) {
+      const groupMember = group.groupMemberList.find((m) => m.email === member.memberEmail);
+      const idOrEmail = groupMember?.member_id || member.memberEmail;
+
+      const transactionData: TExpense | TIncome = {
+        transactionType,
+        currency,
+        date,
+        amount: member.amount || 0,
+        distribution_type,
+        description,
+        type_id: idConverter(type_id) as Types.ObjectId,
+        user_id,
+        isGroupTransaction: true,
+        group_id: idConverter(group_id) as Types.ObjectId,
+        typeModel:
+          transactionType === transactionTypeConst.expense
+            ? 'PersonalExpenseTypes'
+            : 'PersonalIncomeTypes',
+        spender_id_Or_Email: transactionType === transactionTypeConst.expense ? idOrEmail : null,
+        earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? idOrEmail : null,
+      };
+      transactions.push(transactionData);
     }
   }
-  //if it is personal transaction
-  else {
-    const personalTransactionData = {
-      transactionType: transactionType,
-      curacy: curacy,
-      date: date,
-      amount: amount,
-      distribution_type: distribution_type,
-      description: description,
-      type_id: type_id,
-      user_id: user_id,
-      isGroupTransaction: false,
-      group_id:null,
-    };
-  }
+
+  console.log('Transactions to be saved:', transactions);
+
+  // Create transactions using TransactionModel
+  const result = await TransactionModel.insertMany(transactions);
+  return result;
 };
 
 const incomeAndExpensesService = {
