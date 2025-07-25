@@ -42,6 +42,12 @@ const ProfileSchema = new Schema<TProfile>(
     aiChatCount:{ type: Number, required: false, default: 100 },
     maxGroups: { type: Number, required: false, default: 3 },
     totalCreatedGroups: { type: Number, required: false, default: 0 },
+    groupList: {
+      type: [Schema.Types.ObjectId],
+      ref: 'ExpenseOrIncomeGroup',
+      required: false,
+      default: [],
+    },
 
 
     assistantType: {

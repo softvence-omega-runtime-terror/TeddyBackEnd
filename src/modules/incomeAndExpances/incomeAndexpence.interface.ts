@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 
 export type TExpenseOrIncomeGroup = {
   user_id: Types.ObjectId;
+  groupName: string;
   groupType: 'expense' | 'income';
   groupMemberList: [
     {
@@ -10,8 +11,11 @@ export type TExpenseOrIncomeGroup = {
       existOnPlatform?: boolean;
       isInvitationEmailSent?: boolean;
       name?: string;
+      isDeleted?: boolean; // Optional, to mark if the member is deleted
     }
   ];
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 export type TPersonalExpenseTypes = {

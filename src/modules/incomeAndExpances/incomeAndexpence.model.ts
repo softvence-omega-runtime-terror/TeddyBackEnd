@@ -1,4 +1,6 @@
-import { Schema, Types, model, Document } from 'mongoose';
+import {  Schema, Types, model} from 'mongoose';
+import { Document } from 'mongoose';
+import {  TExpenseOrIncomeGroup } from './incomeAndexpence.interface';
 
 // Type for the Transaction document (union of TExpense and TIncome)
 type TransactionDocument = Document & (
@@ -34,12 +36,18 @@ type TransactionDocument = Document & (
     }
 );
 
+
+
 // Expense Group Schema
-const expenseOrIncomeGroup = new Schema(
+const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
   {
     user_id: {
       type: Schema.Types.ObjectId,
       ref: 'UserCollection',
+      required: true,
+    },
+    groupName: {
+      type: String,
       required: true,
     },
     groupType: {
@@ -55,14 +63,16 @@ const expenseOrIncomeGroup = new Schema(
           existOnPlatform: { type: Boolean, required: false, default: false },
           isInvitationEmailSent: { type: Boolean, required: false, default: false },
           name: { type: String, required: false },
+          isDeleted: { type: Boolean, required: false, default: false }, // Optional, to mark if the member is deleted
         },
       ],
       required: true,
       default: [],
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
 
 // Personal Expense Types Schema
 const personalExpenseTypesSchema = new Schema(
@@ -197,7 +207,7 @@ transactionSchema.pre('save', function (next) {
 });
 
 // Create and export models
-export const ExpenseOrIncomeGroupModel = model('ExpenseGroup', expenseOrIncomeGroup);
+export const ExpenseOrIncomeGroupModel = model('ExpenseGroupOrIncomeGroup', expenseOrIncomeGroup);
 export const ExpenseTypesModel = model('TPersonalExpenseTypes', personalExpenseTypesSchema);
 export const IncomeTypesModel = model('TPersonalIncomeTypes', personalIncomeTypesSchema);
 export const TransactionModel = model<TransactionDocument>('Transaction', transactionSchema);

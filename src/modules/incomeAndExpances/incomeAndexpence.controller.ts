@@ -101,19 +101,38 @@ const getAllPersonalGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
 
-  const groupType = req.query.groupType; // 'expense' or 'income'
-  if (!groupType || (groupType !== 'expense' && groupType !== 'income')) {
-    throw Error;
-  }
+  const groupType = req.query.groupType as 'expense' | 'income'; // 'expense' or 'income'
+  const groupName = req.query.groupName as string | undefined;
+
 
   const result = await incomeAndExpensesService.getAllPersonalGroup(
     user_id,
+    groupName,
     groupType,
   );
   res.status(200).json({
     status: 'success',
     data: result,
     message: 'All personal groups retrieved successfully',
+  });
+});
+const leaveGroupOrKickOut = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;  
+  const groupId = req.body.groupId as string;
+  const group_id = idConverter(groupId) as Types.ObjectId;
+  const memberId = req.body.memberId as string ;
+  const member_id = idConverter(memberId) as Types.ObjectId;  // Convert to ObjectId or null if not provided
+
+ const result = await incomeAndExpensesService.leaveGroupOrKickOut(
+    user_id,
+    group_id,
+    member_id,
+  );  
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Group member left or kicked out successfully',
   });
 });
 
@@ -143,6 +162,7 @@ const incomeAndExpensesController = {
   createOrUpdateExpenseOrIncomeGroup,
   getAllExpensesType,
   getAllPersonalGroup,
+  leaveGroupOrKickOut
 };
 
 export default incomeAndExpensesController;

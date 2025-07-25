@@ -236,7 +236,7 @@ const createOrUpdateExpenseOrIncomeGroup = async (
       throw new Error('Creator profile not found');
     }
 
-   // Check group creation limit if creating a new group (no group_id provided)
+    // Check group creation limit if creating a new group (no group_id provided)
     if (!group_id) {
       const totalCreatedGroups = creatorProfile.totalCreatedGroups || 0;
       const maxGroups = creatorProfile.maxGroups || 3;
@@ -304,6 +304,19 @@ const createOrUpdateExpenseOrIncomeGroup = async (
       { upsert: true, new: true, setDefaultsOnInsert: true, session }
     );
 
+    // Update groupList for all members with existing profiles (including creator)
+    await Promise.all(
+      processedMemberList
+        .filter((member) => member.existOnPlatform && member.member_id)
+        .map(async (member) => {
+          await ProfileModel.updateOne(
+            { user_id: member.member_id },
+            { $addToSet: { groupList: group._id } }, // Use $addToSet to avoid duplicates
+            { session }
+          );
+        })
+    );
+
     // If creating a new group (no group_id and no existing group found), increment totalCreatedGroups
     if (!group_id && group.createdAt === group.updatedAt) {
       await ProfileModel.updateOne(
@@ -325,10 +338,103 @@ const createOrUpdateExpenseOrIncomeGroup = async (
   }
 };
 
+const getAllPersonalGroup = async (
+  user_id: Types.ObjectId,
+  groupName?: string,
+  groupType?: 'expense' | 'income'
+) => {
+  try {
+    // Fetch the user's profile to get the groupList
+    const profile = await ProfileModel.findOne({ user_id }).select('groupList');
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
 
-const getAllPersonalGroup = async (user_id: Types.ObjectId, groupType: 'expense' | 'income') => {
+    // Build the query for groups based on groupList
+    const query: any = { _id: { $in: profile.groupList || [] } };
 
-}
+    // Apply filters if provided
+    if (groupName) {
+      query.groupName = { $regex: groupName, $options: 'i' }; // Case-insensitive partial match
+    }
+    if (groupType) {
+      query.groupType = groupType;
+    }
+
+    // Fetch groups from ExpenseOrIncomeGroupModel
+    const groups = await ExpenseOrIncomeGroupModel.find(query).lean();
+
+    return groups;
+  } catch (error: unknown) {
+    console.error('Error in getAllPersonalGroup:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Error(`Failed to fetch groups: ${errorMessage}`);
+  }
+};
+const leaveGroupOrKickOut = async (
+  user_id: Types.ObjectId,
+  member_id: Types.ObjectId,
+  group_id: Types.ObjectId
+) => {
+  const session = await startSession();
+  try {
+    session.startTransaction();
+
+    // Fetch the group by group_id
+    const group = await ExpenseOrIncomeGroupModel.findOne({ _id: group_id }).session(session);
+    if (!group) {
+      throw new Error('Group not found');
+    }
+
+    // Check if user_id is the group owner
+    const isOwner = user_id.equals(group.user_id);
+
+    // Case 1: user_id equals member_id (user is trying to leave)
+    if (user_id.equals(member_id)) {
+      if (isOwner) {
+        throw new Error("A group owner can't leave or be  deleted");
+      }
+    } 
+    // Case 2: user_id does not equal member_id (user is trying to kick out another member)
+    else {
+      if (!isOwner) {
+        throw new Error('Only group owner can remove a member');
+      }
+    }
+
+    // Find the member in groupMemberList
+    const memberIndex = group.groupMemberList.findIndex(
+      (member) => member.member_id && member.member_id.equals(member_id)
+    );
+    if (memberIndex === -1) {
+      throw new Error('Member not found in group');
+    }
+
+    // Mark the member as deleted
+    group.groupMemberList[memberIndex].isDeleted = true;
+
+    // Save the updated group
+    await group.save({ session });
+
+    // Remove the group_id from the member's groupList in ProfileModel
+    await ProfileModel.updateOne(
+      { user_id: member_id },
+      { $pull: { groupList: group_id } },
+      { session }
+    );
+
+    await session.commitTransaction();
+    return { success: true, message: 'Member removed from group successfully' };
+  } catch (error: unknown) {
+    await session.abortTransaction();
+    console.error('Error in leaveGroupOrKickOut:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Error(`Failed to remove member from group: ${errorMessage}`);
+  } finally {
+    session.endSession();
+  }
+};
+
 
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   if (!user_id) {
@@ -552,7 +658,8 @@ const incomeAndExpensesService = {
   getAllExpensesType,
   createOrUpdateExpenseOrIncomeGroup,
   addIncomeOrExpenses,
-  getAllPersonalGroup
+  getAllPersonalGroup,
+  leaveGroupOrKickOut
 };
 
 export default incomeAndExpensesService;

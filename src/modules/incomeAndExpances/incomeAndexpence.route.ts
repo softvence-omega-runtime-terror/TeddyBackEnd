@@ -17,6 +17,7 @@ incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user]), incomeAn
 
 incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createExpensesType )
 incomeAndExpenseRouter.post("/getAllPersonalGroup",auth([userRole.user]), incomeAndExpensesController.getAllPersonalGroup )
+incomeAndExpenseRouter.post("/leaveGroupOrKickOut",auth([userRole.user]), incomeAndExpensesController.leaveGroupOrKickOut )
 
 
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )
