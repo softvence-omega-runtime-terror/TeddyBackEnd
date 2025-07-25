@@ -40,7 +40,8 @@ const ProfileSchema = new Schema<TProfile>(
     monthStart: { type: Date, required: false },
     monthEnd: { type: Date, required: false },
     aiChatCount:{ type: Number, required: false, default: 100 },
-    totalCreatedGroups: { type: Number, required: false, default: 3 },
+    maxGroups: { type: Number, required: false, default: 3 },
+    totalCreatedGroups: { type: Number, required: false, default: 0 },
 
 
     assistantType: {

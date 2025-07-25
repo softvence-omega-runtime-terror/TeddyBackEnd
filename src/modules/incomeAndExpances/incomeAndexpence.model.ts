@@ -15,7 +15,7 @@ type TransactionDocument = Document & (
       group_id?: Types.ObjectId;
       spender_id_Or_Email: Types.ObjectId | string;
       earnedBy_id_Or_Email?: never;
-      typeModel: 'PersonalExpenseTypes';
+      typeModel: 'TPersonalExpenseTypes';
     }
   | {
       transactionType: 'income';
@@ -30,12 +30,12 @@ type TransactionDocument = Document & (
       group_id?: Types.ObjectId;
       spender_id_Or_Email?: never;
       earnedBy_id_Or_Email: Types.ObjectId | string;
-      typeModel: 'PersonalIncomeTypes';
+      typeModel: 'TPersonalIncomeTypes';
     }
 );
 
 // Expense Group Schema
-const expenseGroupSchema = new Schema(
+const expenseOrIncomeGroup = new Schema(
   {
     user_id: {
       type: Schema.Types.ObjectId,
@@ -175,7 +175,7 @@ const transactionSchema = new Schema<TransactionDocument>(
     },
     typeModel: {
       type: String,
-      enum: ['PersonalExpenseTypes', 'PersonalIncomeTypes'],
+      enum: ['TPersonalExpenseTypes', 'TPersonalIncomeTypes'],
       required: true,
     },
   },
@@ -189,17 +189,17 @@ const transactionSchema = new Schema<TransactionDocument>(
 // Pre-save hook to set typeModel based on transactionType
 transactionSchema.pre('save', function (next) {
   if (this.transactionType === 'expense') {
-    this.typeModel = 'PersonalExpenseTypes';
+    this.typeModel = 'TPersonalExpenseTypes';
   } else if (this.transactionType === 'income') {
-    this.typeModel = 'PersonalIncomeTypes';
+    this.typeModel = 'TPersonalIncomeTypes';
   }
   next();
 });
 
 // Create and export models
-export const ExpenseGroupModel = model('ExpenseGroup', expenseGroupSchema);
-export const ExpenseTypesModel = model('PersonalExpenseTypes', personalExpenseTypesSchema);
-export const IncomeTypesModel = model('PersonalIncomeTypes', personalIncomeTypesSchema);
+export const ExpenseOrIncomeGroupModel = model('ExpenseGroup', expenseOrIncomeGroup);
+export const ExpenseTypesModel = model('TPersonalExpenseTypes', personalExpenseTypesSchema);
+export const IncomeTypesModel = model('TPersonalIncomeTypes', personalIncomeTypesSchema);
 export const TransactionModel = model<TransactionDocument>('Transaction', transactionSchema);
 
 // C7-07232025

@@ -15,6 +15,9 @@ incomeAndExpenseRouter.get("/getAllIncomeType",auth([userRole.user]), incomeAndE
 incomeAndExpenseRouter.post("/createExpensesType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createExpensesType )
 incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user]), incomeAndExpensesController.getAllExpensesType )
 
+incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createExpensesType )
+incomeAndExpenseRouter.post("/getAllPersonalGroup",auth([userRole.user]), incomeAndExpensesController.getAllPersonalGroup )
+
 
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )
 

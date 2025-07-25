@@ -3,8 +3,6 @@ import catchAsync from '../../util/catchAsync';
 import idConverter from '../../util/idConverter';
 import incomeAndExpensesService from './incomeAndexpence.service';
 
-
-
 const createIncomeType = catchAsync(async (req, res) => {
   const userId = req.user?.id; // Optional, as user may not be authenticated for common types
   const user_id = userId ? idConverter(userId) : null; // Convert to ObjectId or null for common types
@@ -42,7 +40,6 @@ const getAllIncomeType = catchAsync(async (req, res) => {
     message: 'All the income type for this user is fund',
   });
 });
-
 
 const createExpensesType = catchAsync(async (req, res) => {
   const userId = req.user?.id; // Optional, as user may not be authenticated for common types
@@ -82,7 +79,43 @@ const getAllExpensesType = catchAsync(async (req, res) => {
   });
 });
 
+const createOrUpdateExpenseOrIncomeGroup = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
 
+  const payload = req.body;
+
+  const result =
+    await incomeAndExpensesService.createOrUpdateExpenseOrIncomeGroup(
+      user_id,
+      payload,
+    );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income or Expenses created successfully',
+  });
+});
+const getAllPersonalGroup = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+
+  const groupType = req.query.groupType; // 'expense' or 'income'
+  if (!groupType || (groupType !== 'expense' && groupType !== 'income')) {
+    throw Error;
+  }
+
+  const result = await incomeAndExpensesService.getAllPersonalGroup(
+    user_id,
+    groupType,
+  );
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'All personal groups retrieved successfully',
+  });
+});
 
 const addIncomeOrExpenses = catchAsync(async (req, res) => {
   const userId = req.user.id;
@@ -90,7 +123,10 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
 
   const payload = req.body;
 
-  const result = await incomeAndExpensesService.addIncomeOrExpenses(user_id, payload);
+  const result = await incomeAndExpensesService.addIncomeOrExpenses(
+    user_id,
+    payload,
+  );
 
   res.status(200).json({
     status: 'success',
@@ -104,7 +140,9 @@ const incomeAndExpensesController = {
   createIncomeType,
   getAllIncomeType,
   createExpensesType,
-  getAllExpensesType
+  createOrUpdateExpenseOrIncomeGroup,
+  getAllExpensesType,
+  getAllPersonalGroup,
 };
 
 export default incomeAndExpensesController;

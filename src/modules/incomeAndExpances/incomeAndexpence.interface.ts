@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 
-export type ExpenseOrIncomeGroup = {
+export type TExpenseOrIncomeGroup = {
   user_id: Types.ObjectId;
   groupType: 'expense' | 'income';
   groupMemberList: [
@@ -14,7 +14,7 @@ export type ExpenseOrIncomeGroup = {
   ];
 };
 
-export type PersonalExpenseTypes = {
+export type TPersonalExpenseTypes = {
   user_id: Types.ObjectId;
   expenseTypeList: [
     {
@@ -24,7 +24,7 @@ export type PersonalExpenseTypes = {
   ];
 };
 
-export type PersonalIncomeTypes = {
+export type TPersonalIncomeTypes = {
   user_id: Types.ObjectId;
   incomeTypeList: [
     {
@@ -47,7 +47,7 @@ export type TExpense = {
   group_id?: Types.ObjectId | null;
   spender_id_Or_Email: Types.ObjectId | string| null;
   earnedBy_id_Or_Email?: never;
-  typeModel: 'PersonalExpenseTypes';
+  typeModel: 'TPersonalExpenseTypes';
 };
 
 export type TIncome = {
@@ -63,5 +63,5 @@ export type TIncome = {
   group_id?: Types.ObjectId | null;
   spender_id_Or_Email?: never;
   earnedBy_id_Or_Email: Types.ObjectId | string| null ;
-  typeModel: 'PersonalIncomeTypes';
+  typeModel: 'TPersonalIncomeTypes';
 };

@@ -23,6 +23,8 @@ const config = {
   cloudinary_name: process.env.CLOUDINARY_NAME,
   cloudinary_api_key: process.env.CLOUDINARY_API_KEY,
   cloudinary_api_secret: process.env.CLOUDINARY_API_SECRET,
+
+  App_Download_Url:process.env.APP_DOWNLOAD_URL as string,
 };
 
 export default config;

@@ -1,9 +1,11 @@
-import { Types } from 'mongoose';
-import { ExpenseTypesModel, IncomeTypesModel, TransactionModel, ExpenseGroupModel } from './incomeAndexpence.model';
+import { startSession, Types } from 'mongoose';
+import { ExpenseTypesModel, IncomeTypesModel, TransactionModel, ExpenseOrIncomeGroupModel } from './incomeAndexpence.model';
 import { uploadImgToCloudinary } from '../../util/uploadImgToCludinary';
 import { transactionTypeConst } from '../../constants';
 import idConverter from '../../util/idConverter';
-import { TExpense, TIncome } from './incomeAndexpence.interface';
+import { sendEmail } from '../../util/sendEmail';
+import { ProfileModel } from '../user/user.model';
+import config from '../../config';
 
 // Subdocument Interfaces for Service
 interface IncomeTypeSubdocument {
@@ -218,16 +220,125 @@ const getAllExpensesType = async (user_id: Types.ObjectId) => {
   }
 };
 
+const createOrUpdateExpenseOrIncomeGroup = async (
+  user_id: Types.ObjectId,
+  payload: { groupType: 'expense' | 'income'; memberEmails: string[]; group_id?: Types.ObjectId }
+) => {
+  const session = await startSession();
+  try {
+    session.startTransaction();
+
+    const { groupType, memberEmails, group_id } = payload;
+
+    // Fetch the creator's profile to include them in the group
+    const creatorProfile = await ProfileModel.findOne({ user_id }).session(session);
+    if (!creatorProfile) {
+      throw new Error('Creator profile not found');
+    }
+
+   // Check group creation limit if creating a new group (no group_id provided)
+    if (!group_id) {
+      const totalCreatedGroups = creatorProfile.totalCreatedGroups || 0;
+      const maxGroups = creatorProfile.maxGroups || 3;
+      if (totalCreatedGroups >= maxGroups) {
+        throw new Error('Maximum group creation limit exceeded');
+      }
+    }
+
+    // Prepare the groupMemberList, including the creator
+    const processedMemberList = await Promise.all(
+      // Include creator's email first
+      [creatorProfile.email, ...memberEmails].map(async (email) => {
+        // Check if the email corresponds to an existing profile
+        const existingProfile = await ProfileModel.findOne({ email }).session(session);
+
+        if (existingProfile) {
+          // User exists on the platform
+          return {
+            email,
+            member_id: existingProfile.user_id,
+            existOnPlatform: true,
+            isInvitationEmailSent: false,
+            name: existingProfile.name || email, // Use name from profile or email as fallback
+          };
+        } else {
+          // User does not exist, send invitation email
+          const subject = 'Invitation to Join Our App';
+          const html = `
+            <h1>Welcome to Our App!</h1>
+            <p>You have been invited to join our app by a user. You have been included in a ${groupType} group.</p>
+            <p>Please sign up using this email: ${email}</p>
+            <a href="${config.App_Download_Url}">Click here to sign up</a>
+          `;
+
+          const emailResult = await sendEmail(email, subject, html);
+
+          if (emailResult.success) {
+            return {
+              email,
+              member_id: null,
+              existOnPlatform: false,
+              isInvitationEmailSent: true,
+              name: email, // Use email as name if profile not found
+            };
+          } else {
+            throw new Error(`Failed to send invitation email to ${email}`);
+          }
+        }
+      })
+    );
+
+    // Create or update the group
+    const query = group_id
+      ? { _id: group_id, user_id } // Update specific group if group_id is provided
+      : { user_id, groupType }; // Create or update based on user_id and groupType if no group_id
+
+    const group = await ExpenseOrIncomeGroupModel.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          groupMemberList: processedMemberList,
+          ...(group_id ? {} : { groupType }), // Set groupType only for create, not update
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true, session }
+    );
+
+    // If creating a new group (no group_id and no existing group found), increment totalCreatedGroups
+    if (!group_id && group.createdAt === group.updatedAt) {
+      await ProfileModel.updateOne(
+        { user_id },
+        { $inc: { totalCreatedGroups: 1 } },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+    return group;
+  } catch (error: unknown) {
+    await session.abortTransaction();
+    console.error('Error in createOrUpdateExpenseOrIncomeGroup:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Error(`Failed to create or update group: ${errorMessage}`);
+  } finally {
+    session.endSession();
+  }
+};
+
+
+const getAllPersonalGroup = async (user_id: Types.ObjectId, groupType: 'expense' | 'income') => {
+
+}
+
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   if (!user_id) {
     throw new Error('User ID is required to add income or expenses');
   }
 
-  let {
+  const {
     transactionType,
     currency,
-    date,
-    amount,
+    date,  
     distribution_type,
     description,
     type_id,
@@ -235,6 +346,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     group_id,
     distributionAmong,
   } = payload;
+  let amount = payload.amount || 0; // Default to 0 if not provided
 
   // Validate required fields (description optional for expenses)
   if (!transactionType || !currency || !date || !type_id) {
@@ -248,20 +360,18 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   }
 
   // Validate type_id existence
-  const Model =
-    transactionType === transactionTypeConst.expense
-      ? ExpenseTypesModel
-      : IncomeTypesModel;
-  const listField =
-    transactionType === transactionTypeConst.expense
-      ? 'expenseTypeList'
-      : 'incomeTypeList';
-
-  const isTypeExist = await Model.findOne({
+let isTypeExist;
+if (transactionType === transactionTypeConst.expense) {
+  isTypeExist = await ExpenseTypesModel.findOne({
     user_id: { $in: [user_id, null] },
-    [`${listField}._id`]: idConverter(type_id),
+    'expenseTypeList._id': idConverter(type_id),
   });
-
+} else {
+  isTypeExist = await IncomeTypesModel.findOne({
+    user_id: { $in: [user_id, null] },
+    'incomeTypeList._id': idConverter(type_id),
+  });
+}
   if (!isTypeExist) {
     throw new Error(
       `Type with id ${type_id} does not exist for user ${user_id}`,
@@ -269,14 +379,14 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   }
 
   // Prepare transactions
-  const transactions: Array<TExpense | TIncome> = [];
+  const transactions = [];
 
   if (!isGroupTransaction) {
     // Personal transaction: use user_id for spender_id_Or_Email or earnedBy_id_Or_Email
     if (!amount) {
       throw new Error('amount is required for non-group transactions');
     }
-    const transactionData: TExpense | TIncome = {
+    const transactionData = {
       transactionType,
       currency,
       date,
@@ -289,8 +399,8 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       group_id: null,
       typeModel:
         transactionType === transactionTypeConst.expense
-          ? 'PersonalExpenseTypes'
-          : 'PersonalIncomeTypes',
+          ? 'TPersonalExpenseTypes'
+          : 'TPersonalIncomeTypes',
       spender_id_Or_Email: transactionType === transactionTypeConst.expense ? user_id : null,
       earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? user_id : null,
     };
@@ -304,13 +414,14 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       throw new Error('distribution_type is required for group transactions');
     }
 
-    const group = await ExpenseGroupModel.findOne({
+    const group = await ExpenseOrIncomeGroupModel.findOne({
       _id: idConverter(group_id),
+      user_id:user_id,
       groupType: transactionType,
     });
 
     if (!group) {
-      throw new Error(`Group with id ${group_id} does not exist or does not match transaction type`);
+      throw new Error(`Group with id ${group_id} does not exist or does not match transaction type or you are not owner of this group cant modify it`);
     }
 
     let membersToDistribute: Array<{ memberEmail: string; amount?: number }> = [];
@@ -347,7 +458,8 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         ...member,
         amount: amountPerMember,
       }));
-    } else if (distribution_type === 'custom') {
+    } 
+    else if (distribution_type === 'custom') {
       // Require distributionAmong with spentAmount
       if (!distributionAmong || distributionAmong.length === 0) {
         throw new Error('distributionAmong with spentAmount is required for custom distribution');
@@ -403,7 +515,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       const groupMember = group.groupMemberList.find((m) => m.email === member.memberEmail);
       const idOrEmail = groupMember?.member_id || member.memberEmail;
 
-      const transactionData: TExpense | TIncome = {
+      const transactionData= {
         transactionType,
         currency,
         date,
@@ -416,8 +528,8 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         group_id: idConverter(group_id) as Types.ObjectId,
         typeModel:
           transactionType === transactionTypeConst.expense
-            ? 'PersonalExpenseTypes'
-            : 'PersonalIncomeTypes',
+            ? 'TPersonalExpenseTypes'
+            : 'TPersonalIncomeTypes',
         spender_id_Or_Email: transactionType === transactionTypeConst.expense ? idOrEmail : null,
         earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? idOrEmail : null,
       };
@@ -433,11 +545,14 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
 };
 
 const incomeAndExpensesService = {
-  addIncomeOrExpenses,
+  
   createIncomeType,
   createExpensesType,
   getAllIncomeType,
   getAllExpensesType,
+  createOrUpdateExpenseOrIncomeGroup,
+  addIncomeOrExpenses,
+  getAllPersonalGroup
 };
 
 export default incomeAndExpensesService;
