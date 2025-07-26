@@ -4,6 +4,7 @@ export type TExpenseOrIncomeGroup = {
   user_id: Types.ObjectId;
   groupName: string;
   groupType: 'expense' | 'income';
+  reDistributeAmount?: number; // Optional, default to 0
   groupMemberList: [
     {
       email: string;

@@ -55,6 +55,7 @@ const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
       enum: ['expense', 'income'],
       required: true,
     },
+    reDistributeAmount:{type: Number, required: false, default: 0},
     groupMemberList: {
       type: [
         {

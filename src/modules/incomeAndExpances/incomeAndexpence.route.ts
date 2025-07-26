@@ -9,17 +9,30 @@ const incomeAndExpenseRouter = express.Router()
 
 
 incomeAndExpenseRouter.post("/createIncomeType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createIncomeType )
+
 incomeAndExpenseRouter.get("/getAllIncomeType",auth([userRole.user]), incomeAndExpensesController.getAllIncomeType )
 
-
 incomeAndExpenseRouter.post("/createExpensesType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createExpensesType )
+
 incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user]), incomeAndExpensesController.getAllExpensesType )
 
+
+
+
 incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createExpensesType )
+
 incomeAndExpenseRouter.post("/getAllPersonalGroup",auth([userRole.user]), incomeAndExpensesController.getAllPersonalGroup )
+
+incomeAndExpenseRouter.post("/getSingleGroup",auth([userRole.user]), incomeAndExpensesController.getSingleGroup )
+
 incomeAndExpenseRouter.post("/leaveGroupOrKickOut",auth([userRole.user]), incomeAndExpensesController.leaveGroupOrKickOut )
+
+incomeAndExpenseRouter.post("/deleteGroup",auth([userRole.user]), incomeAndExpensesController.deleteGroup )
+
 
 
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )
+
+
 
 export default incomeAndExpenseRouter

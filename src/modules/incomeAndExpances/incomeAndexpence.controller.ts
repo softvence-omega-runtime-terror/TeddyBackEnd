@@ -142,6 +142,21 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
 
   const payload = req.body;
 
+  // Validate payload for required fields
+  const { transactionType, currency, date, type_id, isGroupTransaction, group_id, distribution_type, isRedistribute } = payload;
+
+  if (!transactionType || !currency || !date || !type_id) {
+    throw new Error('transactionType, currency, date, and type_id are required');
+  }
+
+  if (isGroupTransaction && (!group_id || !distribution_type)) {
+    throw new Error('group_id and distribution_type are required for group transactions');
+  }
+
+  if (transactionType === 'income' && !payload.description) {
+    throw new Error('description is required for income transactions');
+  }
+
   const result = await incomeAndExpensesService.addIncomeOrExpenses(
     user_id,
     payload,
@@ -150,7 +165,60 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
   res.status(200).json({
     status: 'success',
     data: result,
-    message: 'Income or Expenses added successfully',
+    message: isRedistribute
+      ? 'Redistribution transaction added successfully'
+      : 'Income or Expenses added successfully',
+  });
+});
+
+const getSingleGroup = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const groupId = req.body.groupId as string;
+  const group_id = idConverter(groupId) as Types.ObjectId;  
+  const result = await incomeAndExpensesService.getSingleGroup(
+    user_id,
+    group_id,
+  );
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Group details retrieved successfully',
+  });
+});
+
+const deleteGroup = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const groupId = req.body.groupId as string;
+  const group_id = idConverter(groupId) as Types.ObjectId;   
+
+  const result = await incomeAndExpensesService.deleteGroup(
+    user_id,
+    group_id,
+  ); 
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Group deleted successfully',
+  });
+})
+
+
+const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;  
+  const incomeOrExpenseId = req.body.incomeOrExpenseId as string;
+  const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId
+
+  const result = await incomeAndExpensesService.getIndividualExpenseOrIncome(
+    user_id,
+    incomeOrExpense_id,
+  );  
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Individual income or expense retrieved successfully',
   });
 });
 
@@ -162,7 +230,10 @@ const incomeAndExpensesController = {
   createOrUpdateExpenseOrIncomeGroup,
   getAllExpensesType,
   getAllPersonalGroup,
-  leaveGroupOrKickOut
+  leaveGroupOrKickOut,
+  deleteGroup,
+  getSingleGroup,
+  getIndividualExpenseOrIncome
 };
 
 export default incomeAndExpensesController;
