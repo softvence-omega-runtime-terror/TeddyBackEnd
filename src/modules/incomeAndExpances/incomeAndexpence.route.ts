@@ -17,7 +17,7 @@ incomeAndExpenseRouter.post("/createExpensesType",auth([userRole.user]),upload.s
 incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user]), incomeAndExpensesController.getAllExpensesType )
 
 
-
+//========================= Group Routes ========================
 
 incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createExpensesType )
 
@@ -29,9 +29,10 @@ incomeAndExpenseRouter.post("/leaveGroupOrKickOut",auth([userRole.user]), income
 
 incomeAndExpenseRouter.post("/deleteGroup",auth([userRole.user]), incomeAndExpensesController.deleteGroup )
 
-
+//========================= Income and Expense Routes ========================
 
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )
+incomeAndExpenseRouter.post("/getAllIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getAllIncomeAndExpenses )
 
 
 

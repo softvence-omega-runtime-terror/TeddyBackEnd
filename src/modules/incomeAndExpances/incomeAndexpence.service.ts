@@ -1,5 +1,10 @@
 import mongoose, { startSession, Types } from 'mongoose';
-import { ExpenseTypesModel, IncomeTypesModel, TransactionModel, ExpenseOrIncomeGroupModel } from './incomeAndexpence.model';
+import {
+  ExpenseTypesModel,
+  IncomeTypesModel,
+  TransactionModel,
+  ExpenseOrIncomeGroupModel,
+} from './incomeAndexpence.model';
 import { uploadImgToCloudinary } from '../../util/uploadImgToCludinary';
 import { transactionTypeConst } from '../../constants';
 import idConverter from '../../util/idConverter';
@@ -221,7 +226,11 @@ const getAllExpensesType = async (user_id: Types.ObjectId) => {
 
 const createOrUpdateExpenseOrIncomeGroup = async (
   user_id: Types.ObjectId,
-  payload: { groupType: 'expense' | 'income'; memberEmails: string[]; group_id?: Types.ObjectId }
+  payload: {
+    groupType: 'expense' | 'income';
+    memberEmails: string[];
+    group_id?: Types.ObjectId;
+  },
 ) => {
   const session = await startSession();
   try {
@@ -230,7 +239,9 @@ const createOrUpdateExpenseOrIncomeGroup = async (
     const { groupType, memberEmails, group_id } = payload;
 
     // Fetch the creator's profile to include them in the group
-    const creatorProfile = await ProfileModel.findOne({ user_id }).session(session);
+    const creatorProfile = await ProfileModel.findOne({ user_id }).session(
+      session,
+    );
     if (!creatorProfile) {
       throw new Error('Creator profile not found');
     }
@@ -249,7 +260,9 @@ const createOrUpdateExpenseOrIncomeGroup = async (
       // Include creator's email first
       [creatorProfile.email, ...memberEmails].map(async (email) => {
         // Check if the email corresponds to an existing profile
-        const existingProfile = await ProfileModel.findOne({ email }).session(session);
+        const existingProfile = await ProfileModel.findOne({ email }).session(
+          session,
+        );
 
         if (existingProfile) {
           // User exists on the platform
@@ -284,7 +297,7 @@ const createOrUpdateExpenseOrIncomeGroup = async (
             throw new Error(`Failed to send invitation email to ${email}`);
           }
         }
-      })
+      }),
     );
 
     // Create or update the group
@@ -300,7 +313,7 @@ const createOrUpdateExpenseOrIncomeGroup = async (
           ...(group_id ? {} : { groupType }), // Set groupType only for create, not update
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true, session }
+      { upsert: true, new: true, setDefaultsOnInsert: true, session },
     );
 
     // Update groupList for all members with existing profiles (including creator)
@@ -311,9 +324,9 @@ const createOrUpdateExpenseOrIncomeGroup = async (
           await ProfileModel.updateOne(
             { user_id: member.member_id },
             { $addToSet: { groupList: group._id } }, // Use $addToSet to avoid duplicates
-            { session }
+            { session },
           );
-        })
+        }),
     );
 
     // If creating a new group (no group_id and no existing group found), increment totalCreatedGroups
@@ -321,7 +334,7 @@ const createOrUpdateExpenseOrIncomeGroup = async (
       await ProfileModel.updateOne(
         { user_id },
         { $inc: { totalCreatedGroups: 1 } },
-        { session }
+        { session },
       );
     }
 
@@ -330,7 +343,8 @@ const createOrUpdateExpenseOrIncomeGroup = async (
   } catch (error: unknown) {
     await session.abortTransaction();
     console.error('Error in createOrUpdateExpenseOrIncomeGroup:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
     throw new Error(`Failed to create or update group: ${errorMessage}`);
   } finally {
     session.endSession();
@@ -340,7 +354,7 @@ const createOrUpdateExpenseOrIncomeGroup = async (
 const getAllPersonalGroup = async (
   user_id: Types.ObjectId,
   groupName?: string,
-  groupType?: 'expense' | 'income'
+  groupType?: 'expense' | 'income',
 ) => {
   try {
     // Fetch the user's profile to get the groupList
@@ -366,19 +380,23 @@ const getAllPersonalGroup = async (
     return groups;
   } catch (error: unknown) {
     console.error('Error in getAllPersonalGroup:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
     throw new Error(`Failed to fetch groups: ${errorMessage}`);
   }
 };
 
-const getSingleGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) => {
+const getSingleGroup = async (
+  user_id: Types.ObjectId,
+  group_id: Types.ObjectId,
+) => {
   if (!user_id || !group_id) {
     throw new Error('user_id and group_id are required');
   }
 
   // Validate group existence and user membership/ownership
   const group = await ExpenseOrIncomeGroupModel.findOne({
-    _id:group_id,
+    _id: group_id,
   }).lean();
 
   if (!group) {
@@ -386,13 +404,19 @@ const getSingleGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId)
   }
 
   // Check if user_id is the owner or in groupMemberList
-  const isOwner = group.user_id && group.user_id.toString() === user_id.toString();
+  const isOwner =
+    group.user_id && group.user_id.toString() === user_id.toString();
   const isMember = group.groupMemberList.some(
-    (member) => member.member_id && member.member_id.toString() === user_id.toString() && !member.isDeleted
+    (member) =>
+      member.member_id &&
+      member.member_id.toString() === user_id.toString() &&
+      !member.isDeleted,
   );
 
   if (!isOwner && !isMember) {
-    throw new Error(`User with id ${user_id} is not the owner or a member of group ${group_id}`);
+    throw new Error(
+      `User with id ${user_id} is not the owner or a member of group ${group_id}`,
+    );
   }
 
   // Fetch all transactions for the group
@@ -405,31 +429,40 @@ const getSingleGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId)
   const contributionMap = new Map<string, number>();
 
   for (const transaction of transactions) {
-    const memberIdOrEmail = transaction.spender_id_Or_Email || transaction.earnedBy_id_Or_Email;
+    const memberIdOrEmail =
+      transaction.spender_id_Or_Email || transaction.earnedBy_id_Or_Email;
     if (memberIdOrEmail) {
-      const currentAmount = contributionMap.get(memberIdOrEmail.toString()) || 0;
-      contributionMap.set(memberIdOrEmail.toString(), currentAmount + (transaction.amount || 0));
+      const currentAmount =
+        contributionMap.get(memberIdOrEmail.toString()) || 0;
+      contributionMap.set(
+        memberIdOrEmail.toString(),
+        currentAmount + (transaction.amount || 0),
+      );
     }
   }
 
   // Resolve names for contributions
   const contributionOfEachMember = await Promise.all(
-    Array.from(contributionMap.entries()).map(async ([idOrEmail, totalSpend]) => {
-      let name = idOrEmail;
+    Array.from(contributionMap.entries()).map(
+      async ([idOrEmail, totalSpend]) => {
+        let name = idOrEmail;
 
-      // Check if idOrEmail is an ObjectId
-      if (Types.ObjectId.isValid(idOrEmail)) {
-        const profile = await ProfileModel.findOne({ _id: idConverter(idOrEmail) }).lean();
-        if (profile && profile.name) {
-          name = profile.name;
+        // Check if idOrEmail is an ObjectId
+        if (Types.ObjectId.isValid(idOrEmail)) {
+          const profile = await ProfileModel.findOne({
+            _id: idConverter(idOrEmail),
+          }).lean();
+          if (profile && profile.name) {
+            name = profile.name;
+          }
         }
-      }
 
-      return {
-        name,
-        totalSpend,
-      };
-    })
+        return {
+          name,
+          totalSpend,
+        };
+      },
+    ),
   );
 
   return {
@@ -439,18 +472,19 @@ const getSingleGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId)
   };
 };
 
-
 const leaveGroupOrKickOut = async (
   user_id: Types.ObjectId,
   member_id: Types.ObjectId,
-  group_id: Types.ObjectId
+  group_id: Types.ObjectId,
 ) => {
   const session = await startSession();
   try {
     session.startTransaction();
 
     // Fetch the group by group_id
-    const group = await ExpenseOrIncomeGroupModel.findOne({ _id: group_id }).session(session);
+    const group = await ExpenseOrIncomeGroupModel.findOne({
+      _id: group_id,
+    }).session(session);
     if (!group) {
       throw new Error('Group not found');
     }
@@ -463,7 +497,7 @@ const leaveGroupOrKickOut = async (
       if (isOwner) {
         throw new Error("A group owner can't leave or be  deleted");
       }
-    } 
+    }
     // Case 2: user_id does not equal member_id (user is trying to kick out another member)
     else {
       if (!isOwner) {
@@ -473,7 +507,7 @@ const leaveGroupOrKickOut = async (
 
     // Find the member in groupMemberList
     const memberIndex = group.groupMemberList.findIndex(
-      (member) => member.member_id && member.member_id.equals(member_id)
+      (member) => member.member_id && member.member_id.equals(member_id),
     );
     if (memberIndex === -1) {
       throw new Error('Member not found in group');
@@ -489,7 +523,7 @@ const leaveGroupOrKickOut = async (
     await ProfileModel.updateOne(
       { user_id: member_id },
       { $pull: { groupList: group_id } },
-      { session }
+      { session },
     );
 
     await session.commitTransaction();
@@ -497,7 +531,8 @@ const leaveGroupOrKickOut = async (
   } catch (error: unknown) {
     await session.abortTransaction();
     console.error('Error in leaveGroupOrKickOut:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
     throw new Error(`Failed to remove member from group: ${errorMessage}`);
   } finally {
     session.endSession();
@@ -506,7 +541,12 @@ const leaveGroupOrKickOut = async (
 
 
 
-const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) => {
+
+
+const deleteGroup = async (
+  user_id: Types.ObjectId,
+  group_id: Types.ObjectId,
+) => {
   const session = await mongoose.startSession();
 
   try {
@@ -515,20 +555,22 @@ const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) =>
     const groupUpdateResult = await ExpenseOrIncomeGroupModel.updateOne(
       { _id: group_id, user_id },
       { $set: { isDeleted: true } },
-      { session }
+      { session },
     );
 
     if (groupUpdateResult.modifiedCount === 0) {
-      throw new Error('Group not found or you are not authorized to delete this group');
+      throw new Error(
+        'Group not found or you are not authorized to delete this group',
+      );
     }
 
     const profileUpdateResult = await ProfileModel.updateOne(
       { user_id },
       {
         $pull: { groupList: group_id },
-        $inc: { totalCreatedGroups: -1 }
+        $inc: { totalCreatedGroups: -1 },
       },
-      { session }
+      { session },
     );
 
     if (profileUpdateResult.modifiedCount === 0) {
@@ -539,14 +581,12 @@ const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) =>
     session.endSession();
 
     return { success: true, message: 'Group deleted successfully' };
-
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
     throw error;
   }
 };
-
 
 // const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
 //   if (!user_id) {
@@ -556,7 +596,7 @@ const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) =>
 //   const {
 //     transactionType,
 //     currency,
-//     date,  
+//     date,
 //     distribution_type,
 //     description,
 //     type_id,
@@ -679,7 +719,7 @@ const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) =>
 //         ...member,
 //         amount: amountPerMember,
 //       }));
-//     } 
+//     }
 //     else if (distribution_type === 'custom') {
 //       // Require distributionAmong with spentAmount
 //       if (!distributionAmong || distributionAmong.length === 0) {
@@ -765,8 +805,6 @@ const deleteGroup = async (user_id: Types.ObjectId, group_id: Types.ObjectId) =>
 //   return result;
 // };
 
-
-
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   if (!user_id) {
     throw new Error('User ID is required to add income or expenses');
@@ -775,7 +813,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   const {
     transactionType,
     currency,
-    date,  
+    date,
     distribution_type,
     description,
     type_id,
@@ -839,8 +877,10 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         transactionType === transactionTypeConst.expense
           ? 'TPersonalExpenseTypes'
           : 'TPersonalIncomeTypes',
-      spender_id_Or_Email: transactionType === transactionTypeConst.expense ? user_id : null,
-      earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? user_id : null,
+      spender_id_Or_Email:
+        transactionType === transactionTypeConst.expense ? user_id : null,
+      earnedBy_id_Or_Email:
+        transactionType === transactionTypeConst.income ? user_id : null,
     };
     transactions.push(transactionData);
   } else {
@@ -859,21 +899,31 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     });
 
     if (!group) {
-      throw new Error(`Group with id ${group_id} does not exist or does not match transaction type or you are not owner of this group cant modify it`);
+      throw new Error(
+        `Group with id ${group_id} does not exist or does not match transaction type or you are not owner of this group cant modify it`,
+      );
     }
 
     // If isRedistribute is true, use reDistributeAmount from group
     if (isRedistribute) {
-      if (group.reDistributeAmount === undefined || group.reDistributeAmount === 0) {
-        throw new Error('No reDistributeAmount available in the group for redistribution');
+      if (
+        group.reDistributeAmount === undefined ||
+        group.reDistributeAmount === 0
+      ) {
+        throw new Error(
+          'No reDistributeAmount available in the group for redistribution',
+        );
       }
       amount = group.reDistributeAmount;
     }
 
-    let membersToDistribute: Array<{ memberEmail: string; amount?: number }> = [];
+    let membersToDistribute: Array<{ memberEmail: string; amount?: number }> =
+      [];
 
     // Filter out deleted members
-    const activeMembers = group.groupMemberList.filter(member => !member.isDeleted);
+    const activeMembers = group.groupMemberList.filter(
+      (member) => !member.isDeleted,
+    );
 
     if (distribution_type === 'equal') {
       if (!amount) {
@@ -888,7 +938,8 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         // Validate provided memberEmails against active members
         const groupMemberEmails = activeMembers.map((member) => member.email);
         const invalidEmails = distributionAmong.filter(
-          (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
+          (member: { memberEmail: string }) =>
+            !groupMemberEmails.includes(member.memberEmail),
         );
         if (invalidEmails.length > 0) {
           throw new Error(
@@ -897,9 +948,11 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
               .join(', ')}`,
           );
         }
-        membersToDistribute = distributionAmong.map((member: { memberEmail: string }) => ({
-          memberEmail: member.memberEmail,
-        }));
+        membersToDistribute = distributionAmong.map(
+          (member: { memberEmail: string }) => ({
+            memberEmail: member.memberEmail,
+          }),
+        );
       }
       // Calculate equal amount per member
       const amountPerMember = amount / membersToDistribute.length;
@@ -907,24 +960,30 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         ...member,
         amount: amountPerMember,
       }));
-    } 
-    else if (distribution_type === 'custom') {
+    } else if (distribution_type === 'custom') {
       // Require distributionAmong with spentAmount
       if (!distributionAmong || distributionAmong.length === 0) {
-        throw new Error('distributionAmong with spentAmount is required for custom distribution');
+        throw new Error(
+          'distributionAmong with spentAmount is required for custom distribution',
+        );
       }
       // Validate spentAmount and memberEmails
       for (const member of distributionAmong) {
         if (!member.memberEmail) {
-          throw new Error('memberEmail is required for each member in distributionAmong');
+          throw new Error(
+            'memberEmail is required for each member in distributionAmong',
+          );
         }
         if (typeof member.spentAmount !== 'number' || member.spentAmount < 0) {
-          throw new Error(`Invalid or missing spentAmount for member ${member.memberEmail}`);
+          throw new Error(
+            `Invalid or missing spentAmount for member ${member.memberEmail}`,
+          );
         }
       }
       const groupMemberEmails = activeMembers.map((member) => member.email);
       const invalidEmails = distributionAmong.filter(
-        (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
+        (member: { memberEmail: string }) =>
+          !groupMemberEmails.includes(member.memberEmail),
       );
       if (invalidEmails.length > 0) {
         throw new Error(
@@ -936,13 +995,15 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       // Calculate total amount if not provided
       if (!amount) {
         amount = distributionAmong.reduce(
-          (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
+          (sum: number, member: { spentAmount: number }) =>
+            sum + member.spentAmount,
           0,
         );
       } else {
         // Validate total spentAmount matches provided amount
         const totalSpentAmount = distributionAmong.reduce(
-          (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
+          (sum: number, member: { spentAmount: number }) =>
+            sum + member.spentAmount,
           0,
         );
         if (totalSpentAmount !== amount) {
@@ -951,17 +1012,21 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
           );
         }
       }
-      membersToDistribute = distributionAmong.map((member: { memberEmail: string; spentAmount: number }) => ({
-        memberEmail: member.memberEmail,
-        amount: member.spentAmount,
-      }));
+      membersToDistribute = distributionAmong.map(
+        (member: { memberEmail: string; spentAmount: number }) => ({
+          memberEmail: member.memberEmail,
+          amount: member.spentAmount,
+        }),
+      );
     } else {
       throw new Error('Invalid distribution_type: must be "equal" or "custom"');
     }
 
     // Create a transaction for each member
     for (const member of membersToDistribute) {
-      const groupMember = activeMembers.find((m) => m.email === member.memberEmail);
+      const groupMember = activeMembers.find(
+        (m) => m.email === member.memberEmail,
+      );
       const idOrEmail = groupMember?.member_id || member.memberEmail;
 
       const transactionData = {
@@ -979,8 +1044,10 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
           transactionType === transactionTypeConst.expense
             ? 'TPersonalExpenseTypes'
             : 'TPersonalIncomeTypes',
-        spender_id_Or_Email: transactionType === transactionTypeConst.expense ? idOrEmail : null,
-        earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? idOrEmail : null,
+        spender_id_Or_Email:
+          transactionType === transactionTypeConst.expense ? idOrEmail : null,
+        earnedBy_id_Or_Email:
+          transactionType === transactionTypeConst.income ? idOrEmail : null,
       };
       transactions.push(transactionData);
     }
@@ -1001,7 +1068,10 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
 
 
 
-const getIndividualExpenseOrIncome = async (user_id: Types.ObjectId, incomeOrExpense_id: Types.ObjectId) => {
+const getIndividualExpenseOrIncome = async (
+  user_id: Types.ObjectId,
+  incomeOrExpense_id: Types.ObjectId,
+) => {
   if (!user_id || !incomeOrExpense_id) {
     throw new Error('user_id and incomeOrExpense_id are required');
   }
@@ -1019,7 +1089,9 @@ const getIndividualExpenseOrIncome = async (user_id: Types.ObjectId, incomeOrExp
   if (!transaction.isGroupTransaction) {
     // Non-group transaction: verify user_id matches
     if (transaction.user_id.toString() !== user_id.toString()) {
-      throw new Error(`User with id ${user_id} is not authorized to access this transaction`);
+      throw new Error(
+        `User with id ${user_id} is not authorized to access this transaction`,
+      );
     }
   } else {
     // Group transaction: verify user is in groupMemberList
@@ -1028,7 +1100,7 @@ const getIndividualExpenseOrIncome = async (user_id: Types.ObjectId, incomeOrExp
     }
 
     const group = await ExpenseOrIncomeGroupModel.findOne({
-      _id:transaction.group_id,
+      _id: transaction.group_id,
     }).lean();
 
     if (!group) {
@@ -1036,21 +1108,30 @@ const getIndividualExpenseOrIncome = async (user_id: Types.ObjectId, incomeOrExp
     }
 
     // Check if user_id is the owner or in groupMemberList
-    const isOwner = group.user_id && group.user_id.toString() === user_id.toString();
+    const isOwner =
+      group.user_id && group.user_id.toString() === user_id.toString();
     const isMember = group.groupMemberList.some(
-      (member) => member.member_id && member.member_id.toString() === user_id.toString() && !member.isDeleted
+      (member) =>
+        member.member_id &&
+        member.member_id.toString() === user_id.toString() &&
+        !member.isDeleted,
     );
 
     if (!isOwner && !isMember) {
-      throw new Error(`User with id ${user_id} is not the owner or a member of group ${transaction.group_id}`);
+      throw new Error(
+        `User with id ${user_id} is not the owner or a member of group ${transaction.group_id}`,
+      );
     }
   }
 
   return transaction;
 };
 
-
-const modifyIncomeOrExpenses = async (user_id: Types.ObjectId, incomeOrExpense_id: Types.ObjectId, payload: any) => {
+const modifyIncomeOrExpenses = async (
+  user_id: Types.ObjectId,
+  incomeOrExpense_id: Types.ObjectId,
+  payload: any,
+) => {
   if (!user_id || !incomeOrExpense_id) {
     throw new Error('user_id and incomeOrExpense_id are required');
   }
@@ -1068,7 +1149,9 @@ const modifyIncomeOrExpenses = async (user_id: Types.ObjectId, incomeOrExpense_i
   if (!transaction.isGroupTransaction) {
     // Non-group transaction: check if user_id matches
     if (transaction.user_id.toString() !== user_id.toString()) {
-      throw new Error(`User with id ${user_id} is not authorized to modify this transaction`);
+      throw new Error(
+        `User with id ${user_id} is not authorized to modify this transaction`,
+      );
     }
   } else {
     // Group transaction: verify user is the owner of the group
@@ -1084,10 +1167,13 @@ const modifyIncomeOrExpenses = async (user_id: Types.ObjectId, incomeOrExpense_i
       throw new Error(`Group with id ${transaction.group_id} does not exist`);
     }
 
-    const isOwner = group.user_id && group.user_id.toString() === user_id.toString();
+    const isOwner =
+      group.user_id && group.user_id.toString() === user_id.toString();
 
     if (!isOwner) {
-      throw new Error(`User with id ${user_id} is not the owner of group ${transaction.group_id}`);
+      throw new Error(
+        `User with id ${user_id} is not the owner of group ${transaction.group_id}`,
+      );
     }
   }
 
@@ -1155,7 +1241,7 @@ const modifyIncomeOrExpenses = async (user_id: Types.ObjectId, incomeOrExpense_i
   const updatedTransaction = await TransactionModel.findOneAndUpdate(
     { _id: incomeOrExpense_id },
     { $set: updateData },
-    { new: true }
+    { new: true },
   ).lean();
 
   if (!updatedTransaction) {
@@ -1166,9 +1252,82 @@ const modifyIncomeOrExpenses = async (user_id: Types.ObjectId, incomeOrExpense_i
 };
 
 
+const getAllIncomeAndExpenses = async (
+  user_id: Types.ObjectId,
+  transactionType?: 'income' | 'expense' | undefined,
+  userEmail?: string // Optional parameter to match email in spender_id_Or_Email or earnedBy_id_Or_Email
+) => {
+  if (!user_id) {
+    throw new Error('User ID is required to fetch income and expenses');
+  }
+
+  // Build the query
+  const query: any = { user_id };
+
+  // If transactionType is provided, add it to the query
+  if (transactionType) {
+    query.transactionType = transactionType;
+    // Match spender_id_Or_Email for expenses or earnedBy_id_Or_Email for income
+    const field = transactionType === 'expense' ? 'spender_id_Or_Email' : 'earnedBy_id_Or_Email';
+    query[field] = {
+      $in: [user_id, ...(userEmail ? [userEmail] : [])], // Match either user_id or userEmail
+    };
+  } else {
+    // If no transactionType, match either spender_id_Or_Email or earnedBy_id_Or_Email
+    query.$or = [
+      {
+        transactionType: 'expense',
+        spender_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] },
+      },
+      {
+        transactionType: 'income',
+        earnedBy_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] },
+      },
+    ];
+  }
+
+  // Fetch transactions
+  const transactions = await TransactionModel.find(query)
+    .sort({ date: -1 }) // Sort by date descending (most recent first)
+    .lean();
+
+  // Calculate totals
+  const totalIncome = transactions
+    .filter((t) => t.transactionType === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpenses = transactions
+    .filter((t) => t.transactionType === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  // Create transactions list (includes both expenses and income, sorted by date)
+  const transactionsList = transactions.map((t) => ({
+    _id: t._id,
+    amount: t.amount,
+    currency: t.currency,
+    date: t.date,
+    description: t.description,
+    transactionType: t.transactionType,
+    distribution_type: t.distribution_type,
+    type_id: t.type_id,
+    isGroupTransaction: t.isGroupTransaction,
+    group_id: t.group_id,
+    spender_id_Or_Email: t.spender_id_Or_Email,
+    earnedBy_id_Or_Email: t.earnedBy_id_Or_Email,
+  }));
+
+  return {
+    totalIncome,
+    totalExpenses,
+    transactionsList,
+  };
+};
+
+
+
+
 
 const incomeAndExpensesService = {
-  
   createIncomeType,
   createExpensesType,
   getAllIncomeType,
@@ -1180,7 +1339,8 @@ const incomeAndExpensesService = {
   deleteGroup,
   getSingleGroup,
   getIndividualExpenseOrIncome,
-  modifyIncomeOrExpenses
+  modifyIncomeOrExpenses,
+  getAllIncomeAndExpenses
 };
 
 export default incomeAndExpensesService;

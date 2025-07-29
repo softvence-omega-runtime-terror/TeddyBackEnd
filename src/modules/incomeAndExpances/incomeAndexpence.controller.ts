@@ -79,6 +79,12 @@ const getAllExpensesType = catchAsync(async (req, res) => {
   });
 });
 
+
+//---------------------------//=========================
+
+
+
+
 const createOrUpdateExpenseOrIncomeGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
@@ -136,11 +142,18 @@ const leaveGroupOrKickOut = catchAsync(async (req, res) => {
   });
 });
 
+
+//======================================================================
+
+
+
+
 const addIncomeOrExpenses = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
 
   const payload = req.body;
+  console.log("here is the payklods", payload)
 
   // Validate payload for required fields
   const { transactionType, currency, date, type_id, isGroupTransaction, group_id, distribution_type, isRedistribute } = payload;
@@ -205,6 +218,9 @@ const deleteGroup = catchAsync(async (req, res) => {
 })
 
 
+//======================================================================
+
+
 const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;  
@@ -222,6 +238,32 @@ const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
   });
 });
 
+
+const getAllIncomeAndExpenses = catchAsync(async (req, res) => {
+  // Extract userId from req.user and convert to ObjectId
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+
+  // Extract optional transactionType from query
+  const transactionType = req.query.transactionType as 'income' | 'expense' | undefined;
+
+  // Extract optional userEmail from req.user (if available)
+  const userEmail = req.user.email as string | undefined;
+
+  // Call the service function
+  const result = await incomeAndExpensesService.getAllIncomeAndExpenses(user_id, transactionType, userEmail);
+
+  // Send response
+  res.status(200).json({
+    status: 'success',
+    data: result,
+  });
+});
+
+
+
+
+
 const incomeAndExpensesController = {
   addIncomeOrExpenses,
   createIncomeType,
@@ -233,7 +275,8 @@ const incomeAndExpensesController = {
   leaveGroupOrKickOut,
   deleteGroup,
   getSingleGroup,
-  getIndividualExpenseOrIncome
+  getIndividualExpenseOrIncome,
+  getAllIncomeAndExpenses
 };
 
 export default incomeAndExpensesController;
