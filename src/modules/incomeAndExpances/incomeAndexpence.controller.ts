@@ -88,6 +88,7 @@ const getAllExpensesType = catchAsync(async (req, res) => {
 const createOrUpdateExpenseOrIncomeGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
+  console.log("here is the user id", user_id);
 
   const payload = req.body;
 
@@ -250,8 +251,18 @@ const getAllIncomeAndExpenses = catchAsync(async (req, res) => {
   // Extract optional userEmail from req.user (if available)
   const userEmail = req.user.email as string | undefined;
 
+  // Extract optional type_id and group_id from query and convert to ObjectId if provided
+  const type_id = req.query.type_id ? idConverter(req.query.type_id as string) as Types.ObjectId : undefined;
+  const group_id = req.query.group_id ? idConverter(req.query.group_id as string) as Types.ObjectId : undefined;
+
   // Call the service function
-  const result = await incomeAndExpensesService.getAllIncomeAndExpenses(user_id, transactionType, userEmail);
+  const result = await incomeAndExpensesService.getAllIncomeAndExpenses(
+    user_id,
+    transactionType,
+    userEmail,
+    type_id,
+    group_id
+  );
 
   // Send response
   res.status(200).json({

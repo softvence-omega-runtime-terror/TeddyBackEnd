@@ -12,6 +12,22 @@ import { sendEmail } from '../../util/sendEmail';
 import { ProfileModel } from '../user/user.model';
 import config from '../../config';
 
+
+
+interface UpdateFields {
+  groupName?: string;
+  groupType?: 'expense' | 'income';
+  groupMemberList?: {
+    email: string;
+    member_id?: Types.ObjectId | null;
+    existOnPlatform?: boolean;
+    isInvitationEmailSent?: boolean;
+    name?: string;
+    isDeleted?: boolean;
+  }[];
+  reDistributeAmount?: number;
+}
+
 // Subdocument Interfaces for Service
 interface IncomeTypeSubdocument {
   img?: string | null;
@@ -98,7 +114,6 @@ const createIncomeType = async (
     throw new Error(`Failed to create income type: ${error.message}`);
   }
 };
-
 const getAllIncomeType = async (user_id: Types.ObjectId) => {
   try {
     // Find user-specific income types
@@ -126,7 +141,6 @@ const getAllIncomeType = async (user_id: Types.ObjectId) => {
     throw new Error(`Failed to fetch income types: ${error.message}`);
   }
 };
-
 const createExpensesType = async (
   payload: any,
   user_id: Types.ObjectId | null = null,
@@ -193,7 +207,6 @@ const createExpensesType = async (
     throw new Error(`Failed to create expense type: ${error.message}`);
   }
 };
-
 const getAllExpensesType = async (user_id: Types.ObjectId) => {
   try {
     // Find user-specific expense types
@@ -224,11 +237,18 @@ const getAllExpensesType = async (user_id: Types.ObjectId) => {
   }
 };
 
+
+
+
+//===============//=========================== Group Routes ========================
+
+
 const createOrUpdateExpenseOrIncomeGroup = async (
   user_id: Types.ObjectId,
   payload: {
-    groupType: 'expense' | 'income';
-    memberEmails: string[];
+    groupName?: string;
+    groupType?: 'expense' | 'income';
+    memberEmails?: string[];
     group_id?: Types.ObjectId;
   },
 ) => {
@@ -236,100 +256,188 @@ const createOrUpdateExpenseOrIncomeGroup = async (
   try {
     session.startTransaction();
 
-    const { groupType, memberEmails, group_id } = payload;
+    const { groupName, groupType, memberEmails, group_id } = payload;
 
-    // Fetch the creator's profile to include them in the group
-    const creatorProfile = await ProfileModel.findOne({ user_id }).session(
-      session,
-    );
+    // Validate required fields for creation
+    if (!group_id) {
+      if (!groupName || !groupType || !memberEmails || memberEmails.length === 0) {
+        throw new Error('groupName, groupType, and memberEmails are required for creating a group');
+      }
+      if (!['expense', 'income'].includes(groupType)) {
+        throw new Error("groupType must be 'expense' or 'income'");
+      }
+    }
+
+    // Fetch the creator's profile
+    const creatorProfile = await ProfileModel.findOne({ user_id }).session(session);
     if (!creatorProfile) {
       throw new Error('Creator profile not found');
     }
 
-    // Check group creation limit if creating a new group (no group_id provided)
+    // For updates, fetch existing group to validate and preserve fields
+    let existingGroup = null;
+    if (group_id) {
+      existingGroup = await ExpenseOrIncomeGroupModel.findOne({ _id: group_id, user_id }).session(session);
+      if (!existingGroup) {
+        throw new Error('Group not found or you do not have permission to update it');
+      }
+    }
+
+    // Check group creation limit and duplicates for new groups
     if (!group_id) {
       const totalCreatedGroups = creatorProfile.totalCreatedGroups || 0;
       const maxGroups = creatorProfile.maxGroups || 3;
       if (totalCreatedGroups >= maxGroups) {
         throw new Error('Maximum group creation limit exceeded');
       }
+
+      const existingGroup = await ExpenseOrIncomeGroupModel.findOne({
+        user_id,
+        groupType,
+        groupName,
+      }).session(session);
+      if (existingGroup) {
+        throw new Error(`A ${groupType} group with name '${groupName}' already exists`);
+      }
     }
 
-    // Prepare the groupMemberList, including the creator
-    const processedMemberList = await Promise.all(
-      // Include creator's email first
-      [creatorProfile.email, ...memberEmails].map(async (email) => {
-        // Check if the email corresponds to an existing profile
-        const existingProfile = await ProfileModel.findOne({ email }).session(
-          session,
+    // Prepare groupMemberList
+    let processedMemberList: {
+      email: string;
+      member_id?: Types.ObjectId | null;
+      existOnPlatform?: boolean;
+      isInvitationEmailSent?: boolean;
+      name?: string;
+      isDeleted?: boolean;
+    }[] = existingGroup?.groupMemberList || [];
+
+    if (memberEmails && Array.isArray(memberEmails)) {
+      // Check for duplicate emails in input
+      const uniqueEmails = new Set(memberEmails);
+      if (uniqueEmails.size !== memberEmails.length) {
+        throw new Error('Duplicate emails are not allowed in memberEmails');
+      }
+
+      // Filter out emails already in the group to avoid duplicates
+      const existingEmails = new Set(processedMemberList.map((member) => member.email));
+      const newEmails = memberEmails.filter((email) => !existingEmails.has(email));
+
+      // Ensure creator's email is included for new groups
+      if (!group_id && !newEmails.includes(creatorProfile.email)) {
+        newEmails.unshift(creatorProfile.email);
+      }
+
+      if (newEmails.length > 0) {
+        const newMembers = await Promise.all(
+          newEmails.map(async (email) => {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+              throw new Error(`Invalid email format: ${email}`);
+            }
+
+            const existingProfile = await ProfileModel.findOne({ email }).session(session);
+            if (existingProfile) {
+              return {
+                email,
+                member_id: existingProfile.user_id,
+                existOnPlatform: true,
+                isInvitationEmailSent: false,
+                name: existingProfile.name || email,
+                isDeleted: false,
+              };
+            } else {
+              const subject = 'Invitation to Join Our App';
+              const html = `
+                <h1>Welcome to Our App!</h1>
+                <p>You have been invited to join our app by a user. You have been included in a ${groupType || existingGroup?.groupType} group: ${groupName || existingGroup?.groupName || 'Unnamed Group'}.</p>
+                <p>Please sign up using this email: ${email}</p>
+                <a href="${config.App_Download_Url}">Click here to sign up</a>
+              `;
+
+              const emailResult = await sendEmail(email, subject, html);
+              if (!emailResult.success) {
+                throw new Error(`Failed to send invitation email to ${email}`);
+              }
+
+              return {
+                email,
+                member_id: null,
+                existOnPlatform: false,
+                isInvitationEmailSent: true,
+                name: email,
+                isDeleted: false,
+              };
+            }
+          }),
         );
 
-        if (existingProfile) {
-          // User exists on the platform
-          return {
-            email,
-            member_id: existingProfile.user_id,
-            existOnPlatform: true,
-            isInvitationEmailSent: false,
-            name: existingProfile.name || email, // Use name from profile or email as fallback
-          };
-        } else {
-          // User does not exist, send invitation email
-          const subject = 'Invitation to Join Our App';
-          const html = `
-            <h1>Welcome to Our App!</h1>
-            <p>You have been invited to join our app by a user. You have been included in a ${groupType} group.</p>
-            <p>Please sign up using this email: ${email}</p>
-            <a href="${config.App_Download_Url}">Click here to sign up</a>
-          `;
+        // Append new members to existing list
+        processedMemberList = [...processedMemberList, ...newMembers];
+      }
+    }
 
-          const emailResult = await sendEmail(email, subject, html);
+    // Prepare update fields
+    const updateFields: UpdateFields = {};
+    if (groupName) updateFields.groupName = groupName;
+    if (groupType) {
+      if (!['expense', 'income'].includes(groupType)) {
+        throw new Error("groupType must be 'expense' or 'income'");
+      }
+      updateFields.groupType = groupType;
+    }
+    if (memberEmails && Array.isArray(memberEmails) && processedMemberList.length > 0) {
+      updateFields.groupMemberList = processedMemberList;
+    }
+    if (!group_id) {
+      updateFields.groupType = groupType; // Required for creation
+      updateFields.reDistributeAmount = 0; // Schema default
+      updateFields.groupMemberList = processedMemberList; // Ensure member list is set for creation
+    }
 
-          if (emailResult.success) {
-            return {
-              email,
-              member_id: null,
-              existOnPlatform: false,
-              isInvitationEmailSent: true,
-              name: email, // Use email as name if profile not found
-            };
-          } else {
-            throw new Error(`Failed to send invitation email to ${email}`);
-          }
-        }
-      }),
-    );
+    // Validate required fields for update
+    if (group_id && Object.keys(updateFields).length === 0) {
+      throw new Error('At least one field (groupName, groupType, or memberEmails) must be provided for update');
+    }
+
+    // Check for duplicate groupName during update
+    if (group_id && groupName && groupName !== existingGroup?.groupName) {
+      const conflictingGroup = await ExpenseOrIncomeGroupModel.findOne({
+        user_id,
+        groupType: groupType || existingGroup?.groupType,
+        groupName,
+        _id: { $ne: group_id },
+      }).session(session);
+      if (conflictingGroup) {
+        throw new Error(`A ${groupType || existingGroup?.groupType} group with name '${groupName}' already exists`);
+      }
+    }
 
     // Create or update the group
     const query = group_id
-      ? { _id: group_id, user_id } // Update specific group if group_id is provided
-      : { user_id, groupType }; // Create or update based on user_id and groupType if no group_id
+      ? { _id: group_id, user_id }
+      : { user_id, groupType, groupName };
 
     const group = await ExpenseOrIncomeGroupModel.findOneAndUpdate(
       query,
-      {
-        $set: {
-          groupMemberList: processedMemberList,
-          ...(group_id ? {} : { groupType }), // Set groupType only for create, not update
-        },
-      },
+      { $set: updateFields },
       { upsert: true, new: true, setDefaultsOnInsert: true, session },
     );
 
-    // Update groupList for all members with existing profiles (including creator)
-    await Promise.all(
-      processedMemberList
-        .filter((member) => member.existOnPlatform && member.member_id)
-        .map(async (member) => {
-          await ProfileModel.updateOne(
-            { user_id: member.member_id },
-            { $addToSet: { groupList: group._id } }, // Use $addToSet to avoid duplicates
-            { session },
-          );
-        }),
-    );
+    // Update groupList for members with existing profiles
+    if (memberEmails && Array.isArray(memberEmails)) {
+      await Promise.all(
+        processedMemberList
+          .filter((member) => member.existOnPlatform && member.member_id)
+          .map(async (member) => {
+            await ProfileModel.updateOne(
+              { user_id: member.member_id },
+              { $addToSet: { groupList: group._id } },
+              { session },
+            );
+          }),
+      );
+    }
 
-    // If creating a new group (no group_id and no existing group found), increment totalCreatedGroups
+    // Increment totalCreatedGroups for new groups
     if (!group_id && group.createdAt === group.updatedAt) {
       await ProfileModel.updateOne(
         { user_id },
@@ -350,7 +458,6 @@ const createOrUpdateExpenseOrIncomeGroup = async (
     session.endSession();
   }
 };
-
 const getAllPersonalGroup = async (
   user_id: Types.ObjectId,
   groupName?: string,
@@ -385,7 +492,6 @@ const getAllPersonalGroup = async (
     throw new Error(`Failed to fetch groups: ${errorMessage}`);
   }
 };
-
 const getSingleGroup = async (
   user_id: Types.ObjectId,
   group_id: Types.ObjectId,
@@ -471,7 +577,6 @@ const getSingleGroup = async (
     transactions: transactions || [],
   };
 };
-
 const leaveGroupOrKickOut = async (
   user_id: Types.ObjectId,
   member_id: Types.ObjectId,
@@ -587,224 +692,6 @@ const deleteGroup = async (
     throw error;
   }
 };
-
-// const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
-//   if (!user_id) {
-//     throw new Error('User ID is required to add income or expenses');
-//   }
-
-//   const {
-//     transactionType,
-//     currency,
-//     date,
-//     distribution_type,
-//     description,
-//     type_id,
-//     isGroupTransaction,
-//     group_id,
-//     distributionAmong,
-//   } = payload;
-//   let amount = payload.amount || 0; // Default to 0 if not provided
-
-//   // Validate required fields (description optional for expenses)
-//   if (!transactionType || !currency || !date || !type_id) {
-//     throw new Error(
-//       'transactionType, currency, date, and type_id are required',
-//     );
-//   }
-
-//   if (transactionType === transactionTypeConst.income && !description) {
-//     throw new Error('description is required for income transactions');
-//   }
-
-//   // Validate type_id existence
-//   let isTypeExist;
-//   if (transactionType === transactionTypeConst.expense) {
-//     isTypeExist = await ExpenseTypesModel.findOne({
-//       user_id: { $in: [user_id, null] },
-//       'expenseTypeList._id': idConverter(type_id),
-//     });
-//   } else {
-//     isTypeExist = await IncomeTypesModel.findOne({
-//       user_id: { $in: [user_id, null] },
-//       'incomeTypeList._id': idConverter(type_id),
-//     });
-//   }
-//   if (!isTypeExist) {
-//     throw new Error(
-//       `Type with id ${type_id} does not exist for user ${user_id}`,
-//     );
-//   }
-
-//   // Prepare transactions
-//   const transactions = [];
-
-//   if (!isGroupTransaction) {
-//     // Personal transaction: use user_id for spender_id_Or_Email or earnedBy_id_Or_Email
-//     if (!amount) {
-//       throw new Error('amount is required for non-group transactions');
-//     }
-//     const transactionData = {
-//       transactionType,
-//       currency,
-//       date,
-//       amount,
-//       distribution_type: null,
-//       description,
-//       type_id: idConverter(type_id) as Types.ObjectId,
-//       user_id,
-//       isGroupTransaction: false,
-//       group_id: null,
-//       typeModel:
-//         transactionType === transactionTypeConst.expense
-//           ? 'TPersonalExpenseTypes'
-//           : 'TPersonalIncomeTypes',
-//       spender_id_Or_Email: transactionType === transactionTypeConst.expense ? user_id : null,
-//       earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? user_id : null,
-//     };
-//     transactions.push(transactionData);
-//   } else {
-//     // Group transaction: validate group and create transactions for each member
-//     if (!group_id) {
-//       throw new Error('group_id is required for group transactions');
-//     }
-//     if (!distribution_type) {
-//       throw new Error('distribution_type is required for group transactions');
-//     }
-
-//     const group = await ExpenseOrIncomeGroupModel.findOne({
-//       _id: idConverter(group_id),
-//       user_id: user_id,
-//       groupType: transactionType,
-//     });
-
-//     if (!group) {
-//       throw new Error(`Group with id ${group_id} does not exist or does not match transaction type or you are not owner of this group cant modify it`);
-//     }
-
-//     let membersToDistribute: Array<{ memberEmail: string; amount?: number }> = [];
-
-//     // Filter out deleted members
-//     const activeMembers = group.groupMemberList.filter(member => !member.isDeleted);
-
-//     if (distribution_type === 'equal') {
-//       if (!amount) {
-//         throw new Error('amount is required for equal distribution');
-//       }
-//       // If distributionAmong is not provided or empty, use all active group members
-//       if (!distributionAmong || distributionAmong.length === 0) {
-//         membersToDistribute = activeMembers.map((member) => ({
-//           memberEmail: member.email,
-//         }));
-//       } else {
-//         // Validate provided memberEmails against active members
-//         const groupMemberEmails = activeMembers.map((member) => member.email);
-//         const invalidEmails = distributionAmong.filter(
-//           (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
-//         );
-//         if (invalidEmails.length > 0) {
-//           throw new Error(
-//             `Invalid member emails in distributionAmong: ${invalidEmails
-//               .map((m: { memberEmail: string }) => m.memberEmail)
-//               .join(', ')}`,
-//           );
-//         }
-//         membersToDistribute = distributionAmong.map((member: { memberEmail: string }) => ({
-//           memberEmail: member.memberEmail,
-//         }));
-//       }
-//       // Calculate equal amount per member
-//       const amountPerMember = amount / membersToDistribute.length;
-//       membersToDistribute = membersToDistribute.map((member) => ({
-//         ...member,
-//         amount: amountPerMember,
-//       }));
-//     }
-//     else if (distribution_type === 'custom') {
-//       // Require distributionAmong with spentAmount
-//       if (!distributionAmong || distributionAmong.length === 0) {
-//         throw new Error('distributionAmong with spentAmount is required for custom distribution');
-//       }
-//       // Validate spentAmount and memberEmails
-//       for (const member of distributionAmong) {
-//         if (!member.memberEmail) {
-//           throw new Error('memberEmail is required for each member in distributionAmong');
-//         }
-//         if (typeof member.spentAmount !== 'number' || member.spentAmount < 0) {
-//           throw new Error(`Invalid or missing spentAmount for member ${member.memberEmail}`);
-//         }
-//       }
-//       const groupMemberEmails = activeMembers.map((member) => member.email);
-//       const invalidEmails = distributionAmong.filter(
-//         (member: { memberEmail: string }) => !groupMemberEmails.includes(member.memberEmail),
-//       );
-//       if (invalidEmails.length > 0) {
-//         throw new Error(
-//           `Invalid member emails in distributionAmong: ${invalidEmails
-//             .map((m: { memberEmail: string }) => m.memberEmail)
-//             .join(', ')}`,
-//         );
-//       }
-//       // Calculate total amount if not provided
-//       if (!amount) {
-//         amount = distributionAmong.reduce(
-//           (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
-//           0,
-//         );
-//       } else {
-//         // Validate total spentAmount matches provided amount
-//         const totalSpentAmount = distributionAmong.reduce(
-//           (sum: number, member: { spentAmount: number }) => sum + member.spentAmount,
-//           0,
-//         );
-//         if (totalSpentAmount !== amount) {
-//           throw new Error(
-//             `Total spentAmount (${totalSpentAmount}) does not match transaction amount (${amount})`,
-//           );
-//         }
-//       }
-//       membersToDistribute = distributionAmong.map((member: { memberEmail: string; spentAmount: number }) => ({
-//         memberEmail: member.memberEmail,
-//         amount: member.spentAmount,
-//       }));
-//     } else {
-//       throw new Error('Invalid distribution_type: must be "equal" or "custom"');
-//     }
-
-//     // Create a transaction for each member
-//     for (const member of membersToDistribute) {
-//       const groupMember = activeMembers.find((m) => m.email === member.memberEmail);
-//       const idOrEmail = groupMember?.member_id || member.memberEmail;
-
-//       const transactionData = {
-//         transactionType,
-//         currency,
-//         date,
-//         amount: member.amount || 0,
-//         distribution_type,
-//         description,
-//         type_id: idConverter(type_id) as Types.ObjectId,
-//         user_id,
-//         isGroupTransaction: true,
-//         group_id: idConverter(group_id) as Types.ObjectId,
-//         typeModel:
-//           transactionType === transactionTypeConst.expense
-//             ? 'TPersonalExpenseTypes'
-//             : 'TPersonalIncomeTypes',
-//         spender_id_Or_Email: transactionType === transactionTypeConst.expense ? idOrEmail : null,
-//         earnedBy_id_Or_Email: transactionType === transactionTypeConst.income ? idOrEmail : null,
-//       };
-//       transactions.push(transactionData);
-//     }
-//   }
-
-//   console.log('Transactions to be saved:', transactions);
-
-//   // Create transactions using TransactionModel
-//   const result = await TransactionModel.insertMany(transactions);
-//   return result;
-// };
-
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
   if (!user_id) {
     throw new Error('User ID is required to add income or expenses');
@@ -814,11 +701,11 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     transactionType,
     currency,
     date,
-    distribution_type,
     description,
     type_id,
     isGroupTransaction,
     group_id,
+    distribution_type,
     distributionAmong,
     isRedistribute,
   } = payload;
@@ -895,7 +782,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     const group = await ExpenseOrIncomeGroupModel.findOne({
       _id: idConverter(group_id),
       user_id: user_id,
-      groupType: transactionType,
+      // groupType: transactionType,
     });
 
     if (!group) {
@@ -1126,7 +1013,6 @@ const getIndividualExpenseOrIncome = async (
 
   return transaction;
 };
-
 const modifyIncomeOrExpenses = async (
   user_id: Types.ObjectId,
   incomeOrExpense_id: Types.ObjectId,
@@ -1250,12 +1136,12 @@ const modifyIncomeOrExpenses = async (
 
   return updatedTransaction;
 };
-
-
 const getAllIncomeAndExpenses = async (
   user_id: Types.ObjectId,
   transactionType?: 'income' | 'expense' | undefined,
-  userEmail?: string // Optional parameter to match email in spender_id_Or_Email or earnedBy_id_Or_Email
+  userEmail?: string, // Optional parameter to match email in spender_id_Or_Email or earnedBy_id_Or_Email
+  type_id?: Types.ObjectId, // Optional type_id parameter
+  group_id?: Types.ObjectId // Optional group_id parameter
 ) => {
   if (!user_id) {
     throw new Error('User ID is required to fetch income and expenses');
@@ -1263,6 +1149,16 @@ const getAllIncomeAndExpenses = async (
 
   // Build the query
   const query: any = { user_id };
+
+  // Add type_id to the query if provided
+  if (type_id) {
+    query.type_id = type_id;
+  }
+
+  // Add group_id to the query if provided
+  if (group_id) {
+    query.group_id = group_id;
+  }
 
   // If transactionType is provided, add it to the query
   if (transactionType) {
@@ -1316,11 +1212,16 @@ const getAllIncomeAndExpenses = async (
     earnedBy_id_Or_Email: t.earnedBy_id_Or_Email,
   }));
 
-  return {
-    totalIncome,
-    totalExpenses,
-    transactionsList,
-  };
+return transactionType === "income"
+  ? { totalIncome: Number(totalIncome) || 0, transactionsList: transactionsList || [] }
+  : transactionType === "expense"
+  ? { totalExpenses: Number(totalExpenses) || 0, transactionsList: transactionsList || [] }
+  : {
+      totalIncome: Number(totalIncome) || 0,
+      totalExpenses: Number(totalExpenses) || 0,
+      remainingBalance: Number(totalIncome) - Number(totalExpenses) || 0,
+      transactionsList: transactionsList || [],
+    };
 };
 
 
