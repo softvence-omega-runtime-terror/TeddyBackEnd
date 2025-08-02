@@ -32,7 +32,14 @@ export type TProfile = {
   email: string;
   monthStart?: Date;
   monthEnd?: Date;
+  aiChatCount?: number; // Made optional to align with schema
+  chatList_id?: Types.ObjectId; // Optional to align with schema
+  maxGroups?: number; // Optional to align with schema
+  totalCreatedGroups?:number;
+  groupList?: Types.ObjectId[]; // Optional to align with schema
   assistantType : "Supportive_Friendly" | "SarcasticTruth-Teller";
+  plan_id?:Types.ObjectId;
+  planPurchaseDate?:Date;
   img?: string;
   emailNotification: boolean;
   user_id: Types.ObjectId;

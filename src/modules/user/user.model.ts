@@ -28,36 +28,42 @@ const UserSchema = new Schema<TUser>(
 
 const ProfileSchema = new Schema<TProfile>(
   {
-    name: { type: String, required: false },
+    user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' },
+    name: { type: String, required: true },
     phone: { type: String, required: false },
     email: { type: String, required: true },
+       img: {
+      type: String,
+      required: false,
+      default: 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
+    },
     monthStart: { type: Date, required: false },
     monthEnd: { type: Date, required: false },
+    aiChatCount:{ type: Number, required: false, default: 100 },
+    maxGroups: { type: Number, required: false, default: 3 },
+    totalCreatedGroups: { type: Number, required: false, default: 0 },
+    groupList: {
+      type: [Schema.Types.ObjectId],
+      ref: 'ExpenseOrIncomeGroup',
+      required: false,
+      default: [],
+    },
+
+
     assistantType: {
       type: String,
       enum: ['Supportive_Friendly', 'SarcasticTruth-Teller'],
       default: 'Supportive_Friendly',
     },
-    img: {
-      type: String,
-      required: false,
-      default:
-        'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
-    },
-
-    user_id: {
-      type: Schema.Types.ObjectId,
-      required: true,
-      ref: 'UserCollection',
-    },
-    notificationList_id: {
-      type: Schema.Types.ObjectId,
-      required: false,
-      ref: 'NotificationList',
-    },
+    plan_id: { type: Schema.Types.ObjectId, required:false, ref: 'Plan' },
+    planPurchaseDate: { type: Date, required: false },
+ 
+    emailNotification: { type: Boolean, required: true, default: false },
+    notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
+    chatList_id:{ type: Schema.Types.ObjectId, required: false, ref: 'ChatCollectionList' },
     isDeleted: { type: Boolean, required: false, default: false },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 UserSchema.pre('save', async function (next) {

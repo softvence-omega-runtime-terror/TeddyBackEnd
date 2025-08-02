@@ -5,6 +5,11 @@ export const userRole = {
   admin: 'admin',
 } as const;
 
+ export const transactionTypeConst = {
+  'expense':'expense',
+  'income':'income'
+} as const
+
 export type TErrorSource = {
   path: string | number;
   message: string;
