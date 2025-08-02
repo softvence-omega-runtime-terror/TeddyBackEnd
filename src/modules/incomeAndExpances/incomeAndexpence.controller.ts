@@ -225,7 +225,7 @@ const deleteGroup = catchAsync(async (req, res) => {
 const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;  
-  const incomeOrExpenseId = req.body.incomeOrExpenseId as string;
+  const incomeOrExpenseId = req.query.incomeOrExpenseId as string;
   const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId
 
   const result = await incomeAndExpensesService.getIndividualExpenseOrIncome(
@@ -238,8 +238,6 @@ const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
     message: 'Individual income or expense retrieved successfully',
   });
 });
-
-
 const getAllIncomeAndExpenses = catchAsync(async (req, res) => {
   // Extract userId from req.user and convert to ObjectId
   const userId = req.user.id;
@@ -271,6 +269,45 @@ const getAllIncomeAndExpenses = catchAsync(async (req, res) => {
   });
 });
 
+const modifyIncomeOrExpenses = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;    
+  const payload = req.body;
+  const incomeOrExpenseId = req.query.incomeOrExpenseId as string;
+  const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId 
+
+  const result = await incomeAndExpensesService.modifyIncomeOrExpenses(
+    user_id,
+    incomeOrExpense_id,
+    payload,
+  );
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income or Expenses modified successfully',
+  });
+});
+
+const reDistributeAmountAmongMember = catchAsync(async (req, res) => {
+  const userId = req.user.id; // From auth middleware
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const groupId = req.query.groupId as string;
+  const group_id = idConverter(groupId) as Types.ObjectId;
+  const payload = req.body;
+
+  const result = await incomeAndExpensesService.reDistributeAmountAmongMember(
+    user_id,
+    group_id,
+    payload,
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Amount redistributed successfully',
+  });
+});
+
 
 
 
@@ -287,7 +324,9 @@ const incomeAndExpensesController = {
   deleteGroup,
   getSingleGroup,
   getIndividualExpenseOrIncome,
-  getAllIncomeAndExpenses
+  getAllIncomeAndExpenses,
+  modifyIncomeOrExpenses,
+  reDistributeAmountAmongMember
 };
 
 export default incomeAndExpensesController;

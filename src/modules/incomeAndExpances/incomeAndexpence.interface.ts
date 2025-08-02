@@ -5,6 +5,7 @@ export type TExpenseOrIncomeGroup = {
   groupName: string;
   groupType: 'expense' | 'income';
   reDistributeAmount?: number; // Optional, default to 0
+  redistributeTransactionCode?: string | null // Optional, used for redistribution transactions
   groupMemberList: [
     {
       email: string;
@@ -15,6 +16,7 @@ export type TExpenseOrIncomeGroup = {
       isDeleted?: boolean; // Optional, to mark if the member is deleted
     }
   ];
+  isDeleted?: boolean; // Optional, to mark if the group is deleted 
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -41,6 +43,7 @@ export type TPersonalIncomeTypes = {
 
 export type TExpense = {
   transactionType: 'expense';
+  transaction_Code:string;
   currency: string;
   date: string;
   amount: number;
@@ -57,6 +60,7 @@ export type TExpense = {
 
 export type TIncome = {
   transactionType: 'income';
+  transaction_Code:string;
   currency: string;
   date: string;
   amount: number;

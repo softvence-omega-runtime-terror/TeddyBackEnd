@@ -34,6 +34,14 @@ incomeAndExpenseRouter.post("/deleteGroup",auth([userRole.user]), incomeAndExpen
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )//test more
 incomeAndExpenseRouter.post("/getAllIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getAllIncomeAndExpenses )
 
+incomeAndExpenseRouter.post("/getIndividualExpenseOrIncome", auth([userRole.user]), incomeAndExpensesController.getIndividualExpenseOrIncome)
+incomeAndExpenseRouter.post("/modifyIncomeOrExpenses", auth([userRole.user]), incomeAndExpensesController.modifyIncomeOrExpenses)
+incomeAndExpenseRouter.post(
+  '/reDistributeAmountAmongMember',
+  auth([userRole.user]),
+  incomeAndExpensesController.reDistributeAmountAmongMember,
+);
+
 
 
 export default incomeAndExpenseRouter

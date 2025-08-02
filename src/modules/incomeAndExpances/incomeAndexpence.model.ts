@@ -6,6 +6,7 @@ import {  TExpenseOrIncomeGroup } from './incomeAndexpence.interface';
 type TransactionDocument = Document & (
   | {
       transactionType: 'expense';
+      transaction_Code:string;
       currency: string;
       date: string;
       amount: number;
@@ -21,6 +22,7 @@ type TransactionDocument = Document & (
     }
   | {
       transactionType: 'income';
+      transaction_Code:string;
       currency: string;
       date: string;
       amount: number;
@@ -56,6 +58,7 @@ const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
       required: true,
     },
     reDistributeAmount:{type: Number, required: false, default: 0},
+    redistributeTransactionCode: { type: String, required: false , default:null},
     groupMemberList: {
       type: [
         {
@@ -70,6 +73,7 @@ const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
       required: true,
       default: [],
     },
+    isDeleted:{type: Boolean, required: false, default: false}, // Optional, to mark if the group is deleted
   },
   { timestamps: true }
 );
@@ -125,6 +129,10 @@ const transactionSchema = new Schema<TransactionDocument>(
     transactionType: {
       type: String,
       enum: ['expense', 'income'],
+      required: true,
+    },
+    transaction_Code: {
+      type: String,
       required: true,
     },
     currency: {
