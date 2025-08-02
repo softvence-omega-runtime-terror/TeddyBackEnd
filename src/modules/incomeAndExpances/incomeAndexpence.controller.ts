@@ -188,7 +188,7 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
 const getSingleGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
-  const groupId = req.body.groupId as string;
+  const groupId = req.query.groupId as string;
   const group_id = idConverter(groupId) as Types.ObjectId;  
   const result = await incomeAndExpensesService.getSingleGroup(
     user_id,

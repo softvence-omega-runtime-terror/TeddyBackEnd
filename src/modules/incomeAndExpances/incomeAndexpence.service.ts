@@ -13,8 +13,17 @@ import { ProfileModel } from '../user/user.model';
 import config from '../../config';
 
 
-
-interface UpdateFields {
+interface MemberContribution {
+  name: string;
+  totalExpenses: number;
+  totalIncome: number;
+}interface GroupResponse {
+  groupDetail: any; // Adjust based on your TExpenseOrIncomeGroup type
+  totalExpenses: number;
+  totalIncome: number;
+  contributionOfEachMember: MemberContribution[];
+  transactions: any[]; // Adjust based on your Transaction type
+}interface UpdateFields {
   groupName?: string;
   groupType?: 'expense' | 'income';
   groupMemberList?: {
@@ -27,7 +36,6 @@ interface UpdateFields {
   }[];
   reDistributeAmount?: number;
 }
-
 // Subdocument Interfaces for Service
 interface IncomeTypeSubdocument {
   img?: string | null;
@@ -47,6 +55,10 @@ interface ExpenseTypesDocument extends Document {
 }
 
 //.................//...........///..................//...........///.
+
+
+
+
 
 const createIncomeType = async (
   payload: any,
@@ -492,15 +504,16 @@ const getAllPersonalGroup = async (
     throw new Error(`Failed to fetch groups: ${errorMessage}`);
   }
 };
+
 const getSingleGroup = async (
   user_id: Types.ObjectId,
   group_id: Types.ObjectId,
-) => {
+): Promise<GroupResponse> => {
   if (!user_id || !group_id) {
     throw new Error('user_id and group_id are required');
   }
 
-  // Validate group existence and user membership/ownership
+  // Validate group existence
   const group = await ExpenseOrIncomeGroupModel.findOne({
     _id: group_id,
   }).lean();
@@ -510,8 +523,7 @@ const getSingleGroup = async (
   }
 
   // Check if user_id is the owner or in groupMemberList
-  const isOwner =
-    group.user_id && group.user_id.toString() === user_id.toString();
+  const isOwner = group.user_id && group.user_id.toString() === user_id.toString();
   const isMember = group.groupMemberList.some(
     (member) =>
       member.member_id &&
@@ -531,48 +543,56 @@ const getSingleGroup = async (
     isGroupTransaction: true,
   }).lean();
 
-  // Calculate contribution of each member
-  const contributionMap = new Map<string, number>();
+  // Calculate total expenses and income for the group
+  let totalExpenses = 0;
+  let totalIncome = 0;
+  const contributionMap = new Map<string, { totalExpenses: number; totalIncome: number }>();
 
   for (const transaction of transactions) {
     const memberIdOrEmail =
-      transaction.spender_id_Or_Email || transaction.earnedBy_id_Or_Email;
+      transaction.transactionType === 'expense'
+        ? transaction.spender_id_Or_Email
+        : transaction.earnedBy_id_Or_Email;
+
     if (memberIdOrEmail) {
-      const currentAmount =
-        contributionMap.get(memberIdOrEmail.toString()) || 0;
-      contributionMap.set(
-        memberIdOrEmail.toString(),
-        currentAmount + (transaction.amount || 0),
-      );
+      const key = memberIdOrEmail.toString();
+      const current = contributionMap.get(key) || { totalExpenses: 0, totalIncome: 0 };
+
+      if (transaction.transactionType === 'expense') {
+        totalExpenses += transaction.amount || 0;
+        current.totalExpenses += transaction.amount || 0;
+      } else if (transaction.transactionType === 'income') {
+        totalIncome += transaction.amount || 0;
+        current.totalIncome += transaction.amount || 0;
+      }
+
+      contributionMap.set(key, current);
     }
   }
 
-  // Resolve names for contributions
-  const contributionOfEachMember = await Promise.all(
-    Array.from(contributionMap.entries()).map(
-      async ([idOrEmail, totalSpend]) => {
-        let name = idOrEmail;
+  // Map contributions to names from groupMemberList
+  const contributionOfEachMember: MemberContribution[] = Array.from(
+    contributionMap.entries(),
+  ).map(([idOrEmail, { totalExpenses, totalIncome }]) => {
+    // Find the member in groupMemberList to get the name
+    const member = group.groupMemberList.find(
+      (m) =>
+        m.email === idOrEmail ||
+        (m.member_id && m.member_id.toString() === idOrEmail),
+    );
+    const name = member ? member.name || member.email : idOrEmail;
 
-        // Check if idOrEmail is an ObjectId
-        if (Types.ObjectId.isValid(idOrEmail)) {
-          const profile = await ProfileModel.findOne({
-            _id: idConverter(idOrEmail),
-          }).lean();
-          if (profile && profile.name) {
-            name = profile.name;
-          }
-        }
-
-        return {
-          name,
-          totalSpend,
-        };
-      },
-    ),
-  );
+    return {
+      name,
+      totalExpenses,
+      totalIncome,
+    };
+  });
 
   return {
     groupDetail: group,
+    totalExpenses,
+    totalIncome,
     contributionOfEachMember,
     transactions: transactions || [],
   };
@@ -847,23 +867,24 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         ...member,
         amount: amountPerMember,
       }));
-    } else if (distribution_type === 'custom') {
-      // Require distributionAmong with spentAmount
+    } 
+    else if (distribution_type === 'custom') {
+      // Require distributionAmong with spentOrEarnedAmount
       if (!distributionAmong || distributionAmong.length === 0) {
         throw new Error(
-          'distributionAmong with spentAmount is required for custom distribution',
+          'distributionAmong with spentOrEarnedAmount is required for custom distribution',
         );
       }
-      // Validate spentAmount and memberEmails
+      // Validate spentOrEarnedAmount and memberEmails
       for (const member of distributionAmong) {
         if (!member.memberEmail) {
           throw new Error(
             'memberEmail is required for each member in distributionAmong',
           );
         }
-        if (typeof member.spentAmount !== 'number' || member.spentAmount < 0) {
+        if (typeof member.spentOrEarnedAmount !== 'number' || member.spentOrEarnedAmount < 0) {
           throw new Error(
-            `Invalid or missing spentAmount for member ${member.memberEmail}`,
+            `Invalid or missing spentOrEarnedAmount for member ${member.memberEmail}`,
           );
         }
       }
@@ -882,30 +903,32 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       // Calculate total amount if not provided
       if (!amount) {
         amount = distributionAmong.reduce(
-          (sum: number, member: { spentAmount: number }) =>
-            sum + member.spentAmount,
+          (sum: number, member: { spentOrEarnedAmount: number }) =>
+            sum + member.spentOrEarnedAmount,
           0,
         );
-      } else {
-        // Validate total spentAmount matches provided amount
+      } 
+      else {
+        // Validate total spentOrEarnedAmount matches provided amount
         const totalSpentAmount = distributionAmong.reduce(
-          (sum: number, member: { spentAmount: number }) =>
-            sum + member.spentAmount,
+          (sum: number, member: { spentOrEarnedAmount: number }) =>
+            sum + member.spentOrEarnedAmount,
           0,
         );
         if (totalSpentAmount !== amount) {
           throw new Error(
-            `Total spentAmount (${totalSpentAmount}) does not match transaction amount (${amount})`,
+            `Total spentOrEarnedAmount (${totalSpentAmount}) does not match transaction amount (${amount})`,
           );
         }
       }
       membersToDistribute = distributionAmong.map(
-        (member: { memberEmail: string; spentAmount: number }) => ({
+        (member: { memberEmail: string; spentOrEarnedAmount: number }) => ({
           memberEmail: member.memberEmail,
-          amount: member.spentAmount,
+          amount: member.spentOrEarnedAmount,
         }),
       );
-    } else {
+    }
+    else {
       throw new Error('Invalid distribution_type: must be "equal" or "custom"');
     }
 
