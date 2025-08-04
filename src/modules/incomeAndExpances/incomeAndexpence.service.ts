@@ -1,4 +1,4 @@
-import mongoose, { startSession, Types } from 'mongoose';
+import mongoose, { ClientSession, startSession, Types } from 'mongoose';
 import {
   ExpenseTypesModel,
   IncomeTypesModel,
@@ -63,6 +63,7 @@ interface DistributionMember {
 interface Payload {
   distribution_type: 'equal' | 'custom';
   distributionAmong: DistributionMember[];
+  isDiscard?: boolean;
 }
 
 //.................//...........///..................//...........///.
@@ -1319,123 +1320,327 @@ const getGroupMembers = async (group_id: Types.ObjectId) => {
 
   return redistributableMembers;
 };
-const reDistributeAmountAmongMember = async (user_id: Types.ObjectId, group_id: Types.ObjectId, payload: Payload): Promise<Document[]> => {
+// const reDistributeAmountAmongMember = async (user_id: Types.ObjectId, group_id: Types.ObjectId, payload: Payload): Promise<Document[]> => {
+//   const { distribution_type, distributionAmong, isDiscurd } = payload;
+
+//   // Validate payload
+//   if (!distribution_type || !['equal', 'custom'].includes(distribution_type)) {
+//     throw new Error('distribution_type must be "equal" or "custom"');
+//   }
+//   if (!distributionAmong || distributionAmong.length === 0) {
+//     throw new Error('distributionAmong must contain at least one member');
+//   }
+//   for (const member of distributionAmong) {
+//     if (!member.memberEmail) {
+//       throw new Error('memberEmail is required for each member in distributionAmong');
+//     }
+//   }
+
+//   // Fetch the group
+//   const group = await ExpenseOrIncomeGroupModel.findOne({
+//     _id: group_id,
+//   });
+
+//   if (!group || group?.user_id?.toString() !== user_id.toString() || group.isDeleted) {
+//     throw new Error(`Group with id ${group_id} does not exist or you are not authorized to redistribute or the group is deleted`);
+//   }
+
+//   // Validate reDistributeAmount and redistributeTransactionCode
+//   if (group.reDistributeAmount === undefined || group.reDistributeAmount === 0) {
+//     throw new Error('No reDistributeAmount available in the group for redistribution');
+//   }
+//   if (!group.redistributeTransactionCode) {
+//     throw new Error('No redistributeTransactionCode available in the group');
+//   }
+
+//   const amount = group.reDistributeAmount;
+
+//   // Validate group members
+//   const activeMembers = group.groupMemberList.filter((member) => !member.isDeleted);
+//   const groupMemberEmails = activeMembers.map((member) => member.email);
+//   const invalidEmails = distributionAmong.filter(
+//     (member) => !groupMemberEmails.includes(member.memberEmail),
+//   );
+//   if (invalidEmails.length > 0) {
+//     throw new Error(
+//       `Invalid member emails in distributionAmong: ${invalidEmails
+//         .map((m) => m.memberEmail)
+//         .join(', ')}`,
+//     );
+//   }
+
+//   // Prepare members to distribute
+//   let membersToDistribute: Array<{ memberEmail: string; amount: number }> = [];
+//   if (distribution_type === 'equal') {
+//     const amountPerMember = amount / distributionAmong.length; // Allow fractional amounts
+//     membersToDistribute = distributionAmong.map((member) => ({
+//       memberEmail: member.memberEmail,
+//       amount: amountPerMember,
+//     }));
+//   } else if (distribution_type === 'custom') {
+//     for (const member of distributionAmong) {
+//       if (typeof member.spentOrEarnedAmount !== 'number') {
+//         throw new Error(
+//           `Invalid or missing spentOrEarnedAmount for member ${member.memberEmail}`,
+//         );
+//       }
+//     }
+//     const totalSpentAmount = distributionAmong.reduce(
+//       (sum, member) => sum + (member.spentOrEarnedAmount || 0),
+//       0,
+//     );
+//     const difference = Math.abs(totalSpentAmount - amount);
+//     if (difference >= 1) {
+//       throw new Error(
+//         `Total spentOrEarnedAmount (${totalSpentAmount}) differs from reDistributeAmount (${amount}) by ${difference}. Please redistribute again.`,
+//       );
+//     }
+//     membersToDistribute = distributionAmong.map((member) => ({
+//       memberEmail: member.memberEmail,
+//       amount: member.spentOrEarnedAmount!,
+//     }));
+//   }
+
+//   // Find the original transaction to copy details from
+//   const originalTransaction = await TransactionModel.findOne({
+//     transaction_Code: group.redistributeTransactionCode,
+//     group_id,
+//     isGroupTransaction: true,
+//   }).lean();
+
+//   if (!originalTransaction) {
+//     throw new Error(
+//       `No transaction found with redistributeTransactionCode ${group.redistributeTransactionCode}`,
+//     );
+//   }
+
+//   // Prepare transactions
+//   const transactions: any[] = [];
+//   for (const member of membersToDistribute) {
+//     const groupMember = activeMembers.find((m) => m.email === member.memberEmail);
+//     const idOrEmail = groupMember?.member_id || member.memberEmail;
+
+//     // Find existing transaction for the member
+//     const existingTransaction = await TransactionModel.findOne({
+//       transaction_Code: group.redistributeTransactionCode,
+//       group_id,
+//       isGroupTransaction: true,
+//       [originalTransaction.transactionType === 'income'
+//         ? 'earnedBy_id_Or_Email'
+//         : 'spender_id_Or_Email']: idOrEmail,
+//     });
+
+//     if (existingTransaction) {
+//       // Update existing transaction by adding the new amount using transaction_Code and spender/earnedBy
+//       const updatedTransaction = await TransactionModel.findOneAndUpdate(
+//         {
+//           transaction_Code: group.redistributeTransactionCode,
+//           group_id,
+//           isGroupTransaction: true,
+//           [originalTransaction.transactionType === 'income'
+//             ? 'earnedBy_id_Or_Email'
+//             : 'spender_id_Or_Email']: idOrEmail,
+//         },
+//         { $inc: { amount: member.amount } },
+//         { new: true },
+//       ).lean();
+//       if (updatedTransaction) {
+//         transactions.push(updatedTransaction);
+//       } else {
+//         throw new Error(`Failed to update transaction for member ${member.memberEmail}`);
+//       }
+//     } else {
+//       // Create new transaction by copying original transaction details
+//       const transactionData = {
+//         transactionType: originalTransaction.transactionType,
+//         transaction_Code: group.redistributeTransactionCode,
+//         currency: originalTransaction.currency,
+//         date: originalTransaction.date,
+//         amount: member.amount,
+//         distribution_type,
+//         description: originalTransaction.description,
+//         type_id: new Types.ObjectId(originalTransaction.type_id),
+//         user_id: new Types.ObjectId(group.user_id),
+//         isGroupTransaction: true,
+//         group_id,
+//         typeModel: originalTransaction.typeModel,
+//         spender_id_Or_Email:
+//           originalTransaction.transactionType === 'expense' ? idOrEmail : undefined,
+//         earnedBy_id_Or_Email:
+//           originalTransaction.transactionType === 'income' ? idOrEmail : undefined,
+//       };
+//       transactions.push(transactionData);
+//     }
+//   }
+
+//   // Create new transactions if any
+//   if (transactions.some((t) => !('_id' in t))) {
+//     const newTransactions = transactions.filter((t) => !('_id' in t));
+//     const createdTransactions = await TransactionModel.insertMany(newTransactions);
+//     transactions.splice(0, transactions.length, ...createdTransactions, ...transactions.filter((t) => '_id' in t));
+//   }
+
+//   // Update group: reset reDistributeAmount and redistributeTransactionCode
+//   group.reDistributeAmount = 0;
+//   group.redistributeTransactionCode = null;
+//   await group.save();
+
+//   return transactions;
+// };
 
 
 
+const reDistributeAmountAmongMember = async (
+  user_id: Types.ObjectId,
+  group_id: Types.ObjectId,
+  payload: Payload,
+  session?: ClientSession, // Optional session for transaction
+) => {
+  const { distribution_type, distributionAmong, isDiscard } = payload;
 
-  const { distribution_type, distributionAmong } = payload;
-
-  // Validate payload
-  if (!distribution_type || !['equal', 'custom'].includes(distribution_type)) {
-    throw new Error('distribution_type must be "equal" or "custom"');
+  // Start a transaction if no session is provided
+  let localSession: ClientSession | null = null;
+  if (!session) {
+    localSession = await mongoose.startSession();
+    await localSession.startTransaction();
   }
-  if (!distributionAmong || distributionAmong.length === 0) {
-    throw new Error('distributionAmong must contain at least one member');
-  }
-  for (const member of distributionAmong) {
-    if (!member.memberEmail) {
-      throw new Error('memberEmail is required for each member in distributionAmong');
+  const activeSession = session || localSession;
+
+  try {
+    // If isDiscard is true, reset group fields and return
+    if (isDiscard) {
+      const group = await ExpenseOrIncomeGroupModel.findOne(
+        { _id: group_id, user_id, isDeleted: false },
+        null,
+        { session: activeSession },
+      );
+
+      if (!group) {
+        throw new Error(`Group with id ${group_id} does not exist or you are not authorized`);
+      }
+
+      group.reDistributeAmount = 0;
+      group.redistributeTransactionCode = null;
+      await group.save({ session: activeSession });
+
+      // Commit transaction if we started it
+      if (localSession) {
+        await localSession.commitTransaction();
+      }
+
+      return {
+        message: 'Redistribution discarded successfully',
+        success: true,
+      };
     }
-  }
 
-  // Fetch the group
-  const group = await ExpenseOrIncomeGroupModel.findOne({
-    _id: group_id,
-  });
-
-  if (!group || group?.user_id?.toString() !== user_id.toString() || group.isDeleted) {
-    throw new Error(`Group with id ${group_id} does not exist or you are not authorized to redistribute or the group is deleted`);
-  }
-
-  // Validate reDistributeAmount and redistributeTransactionCode
-  if (group.reDistributeAmount === undefined || group.reDistributeAmount === 0) {
-    throw new Error('No reDistributeAmount available in the group for redistribution');
-  }
-  if (!group.redistributeTransactionCode) {
-    throw new Error('No redistributeTransactionCode available in the group');
-  }
-
-  const amount = group.reDistributeAmount;
-
-  // Validate group members
-  const activeMembers = group.groupMemberList.filter((member) => !member.isDeleted);
-  const groupMemberEmails = activeMembers.map((member) => member.email);
-  const invalidEmails = distributionAmong.filter(
-    (member) => !groupMemberEmails.includes(member.memberEmail),
-  );
-  if (invalidEmails.length > 0) {
-    throw new Error(
-      `Invalid member emails in distributionAmong: ${invalidEmails
-        .map((m) => m.memberEmail)
-        .join(', ')}`,
-    );
-  }
-
-  // Prepare members to distribute
-  let membersToDistribute: Array<{ memberEmail: string; amount: number }> = [];
-  if (distribution_type === 'equal') {
-    const amountPerMember = amount / distributionAmong.length; // Allow fractional amounts
-    membersToDistribute = distributionAmong.map((member) => ({
-      memberEmail: member.memberEmail,
-      amount: amountPerMember,
-    }));
-  } else if (distribution_type === 'custom') {
+    // Validate payload for non-discard case
+    if (!distribution_type || !['equal', 'custom'].includes(distribution_type)) {
+      throw new Error('distribution_type must be "equal" or "custom"');
+    }
+    if (!distributionAmong || distributionAmong.length === 0) {
+      throw new Error('distributionAmong must contain at least one member');
+    }
     for (const member of distributionAmong) {
-      if (typeof member.spentOrEarnedAmount !== 'number') {
-        throw new Error(
-          `Invalid or missing spentOrEarnedAmount for member ${member.memberEmail}`,
-        );
+      if (!member.memberEmail) {
+        throw new Error('memberEmail is required for each member in distributionAmong');
       }
     }
-    const totalSpentAmount = distributionAmong.reduce(
-      (sum, member) => sum + (member.spentOrEarnedAmount || 0),
-      0,
+
+    // Fetch the group
+    const group = await ExpenseOrIncomeGroupModel.findOne(
+      { _id: group_id, user_id, isDeleted: false },
+      null,
+      { session: activeSession },
     );
-    const difference = Math.abs(totalSpentAmount - amount);
-    if (difference >= 1) {
+
+    if (!group) {
       throw new Error(
-        `Total spentOrEarnedAmount (${totalSpentAmount}) differs from reDistributeAmount (${amount}) by ${difference}. Please redistribute again.`,
+        `Group with id ${group_id} does not exist or you are not authorized or the group is deleted`,
       );
     }
-    membersToDistribute = distributionAmong.map((member) => ({
-      memberEmail: member.memberEmail,
-      amount: member.spentOrEarnedAmount!,
-    }));
-  }
 
-  // Find the original transaction to copy details from
-  const originalTransaction = await TransactionModel.findOne({
-    transaction_Code: group.redistributeTransactionCode,
-    group_id,
-    isGroupTransaction: true,
-  }).lean();
+    // Validate reDistributeAmount and redistributeTransactionCode
+    if (group.reDistributeAmount === undefined || group.reDistributeAmount === 0) {
+      throw new Error('No reDistributeAmount available in the group for redistribution');
+    }
+    if (!group.redistributeTransactionCode) {
+      throw new Error('No redistributeTransactionCode available in the group');
+    }
 
-  if (!originalTransaction) {
-    throw new Error(
-      `No transaction found with redistributeTransactionCode ${group.redistributeTransactionCode}`,
+    const amount = group.reDistributeAmount;
+
+    // Validate group members
+    const activeMembers = group.groupMemberList.filter((member) => !member.isDeleted);
+    const groupMemberEmails = activeMembers.map((member) => member.email);
+    const invalidEmails = distributionAmong.filter(
+      (member) => !groupMemberEmails.includes(member.memberEmail),
     );
-  }
+    if (invalidEmails.length > 0) {
+      throw new Error(
+        `Invalid member emails in distributionAmong: ${invalidEmails
+          .map((m) => m.memberEmail)
+          .join(', ')}`,
+      );
+    }
 
-  // Prepare transactions
-  const transactions: any[] = [];
-  for (const member of membersToDistribute) {
-    const groupMember = activeMembers.find((m) => m.email === member.memberEmail);
-    const idOrEmail = groupMember?.member_id || member.memberEmail;
+    // Prepare members to distribute
+    let membersToDistribute: Array<{ memberEmail: string; amount: number }> = [];
+    if (distribution_type === 'equal') {
+      const amountPerMember = amount / distributionAmong.length; // Allow fractional amounts
+      membersToDistribute = distributionAmong.map((member) => ({
+        memberEmail: member.memberEmail,
+        amount: amountPerMember,
+      }));
+    } else if (distribution_type === 'custom') {
+      for (const member of distributionAmong) {
+        if (typeof member.spentOrEarnedAmount !== 'number') {
+          throw new Error(
+            `Invalid or missing spentOrEarnedAmount for member ${member.memberEmail}`,
+          );
+        }
+      }
+      const totalSpentAmount = distributionAmong.reduce(
+        (sum, member) => sum + (member.spentOrEarnedAmount || 0),
+        0,
+      );
+      const difference = Math.abs(totalSpentAmount - amount);
+      if (difference >= 1) {
+        throw new Error(
+          `Total spentOrEarnedAmount (${totalSpentAmount}) differs from reDistributeAmount (${amount}) by ${difference}. Please redistribute again.`,
+        );
+      }
+      membersToDistribute = distributionAmong.map((member) => ({
+        memberEmail: member.memberEmail,
+        amount: member.spentOrEarnedAmount!,
+      }));
+    }
 
-    // Find existing transaction for the member
-    const existingTransaction = await TransactionModel.findOne({
-      transaction_Code: group.redistributeTransactionCode,
-      group_id,
-      isGroupTransaction: true,
-      [originalTransaction.transactionType === 'income'
-        ? 'earnedBy_id_Or_Email'
-        : 'spender_id_Or_Email']: idOrEmail,
-    });
+    // Find the original transaction to copy details from
+    const originalTransaction = await TransactionModel.findOne(
+      {
+        transaction_Code: group.redistributeTransactionCode,
+        group_id,
+        isGroupTransaction: true,
+      },
+      null,
+      { session: activeSession },
+    ).lean();
 
-    if (existingTransaction) {
-      // Update existing transaction by adding the new amount using transaction_Code and spender/earnedBy
-      const updatedTransaction = await TransactionModel.findOneAndUpdate(
+    if (!originalTransaction) {
+      throw new Error(
+        `No transaction found with redistributeTransactionCode ${group.redistributeTransactionCode}`,
+      );
+    }
+
+    // Prepare transactions
+    const transactions: any[] = [];
+    for (const member of membersToDistribute) {
+      const groupMember = activeMembers.find((m) => m.email === member.memberEmail);
+      const idOrEmail = groupMember?.member_id || member.memberEmail;
+
+      // Find existing transaction for the member
+      const existingTransaction = await TransactionModel.findOne(
         {
           transaction_Code: group.redistributeTransactionCode,
           group_id,
@@ -1444,52 +1649,94 @@ const reDistributeAmountAmongMember = async (user_id: Types.ObjectId, group_id: 
             ? 'earnedBy_id_Or_Email'
             : 'spender_id_Or_Email']: idOrEmail,
         },
-        { $inc: { amount: member.amount } },
-        { new: true },
-      ).lean();
-      if (updatedTransaction) {
-        transactions.push(updatedTransaction);
+        null,
+        { session: activeSession },
+      );
+
+      if (existingTransaction) {
+        // Update existing transaction by adding the new amount
+        const updatedTransaction = await TransactionModel.findOneAndUpdate(
+          {
+            transaction_Code: group.redistributeTransactionCode,
+            group_id,
+            isGroupTransaction: true,
+            [originalTransaction.transactionType === 'income'
+              ? 'earnedBy_id_Or_Email'
+              : 'spender_id_Or_Email']: idOrEmail,
+          },
+          { $inc: { amount: member.amount } },
+          { new: true, session: activeSession },
+        ).lean();
+        if (updatedTransaction) {
+          transactions.push(updatedTransaction);
+        } else {
+          throw new Error(`Failed to update transaction for member ${member.memberEmail}`);
+        }
       } else {
-        throw new Error(`Failed to update transaction for member ${member.memberEmail}`);
+        // Create new transaction by copying original transaction details
+        const transactionData = {
+          transactionType: originalTransaction.transactionType,
+          transaction_Code: group.redistributeTransactionCode,
+          currency: originalTransaction.currency,
+          date: originalTransaction.date,
+          amount: member.amount,
+          distribution_type,
+          description: originalTransaction.description,
+          type_id: new Types.ObjectId(originalTransaction.type_id),
+          user_id: new Types.ObjectId(group.user_id),
+          isGroupTransaction: true,
+          group_id,
+          typeModel: originalTransaction.typeModel,
+          spender_id_Or_Email:
+            originalTransaction.transactionType === 'expense' ? idOrEmail : undefined,
+          earnedBy_id_Or_Email:
+            originalTransaction.transactionType === 'income' ? idOrEmail : undefined,
+        };
+        transactions.push(transactionData);
       }
-    } else {
-      // Create new transaction by copying original transaction details
-      const transactionData = {
-        transactionType: originalTransaction.transactionType,
-        transaction_Code: group.redistributeTransactionCode,
-        currency: originalTransaction.currency,
-        date: originalTransaction.date,
-        amount: member.amount,
-        distribution_type,
-        description: originalTransaction.description,
-        type_id: new Types.ObjectId(originalTransaction.type_id),
-        user_id: new Types.ObjectId(group.user_id),
-        isGroupTransaction: true,
-        group_id,
-        typeModel: originalTransaction.typeModel,
-        spender_id_Or_Email:
-          originalTransaction.transactionType === 'expense' ? idOrEmail : undefined,
-        earnedBy_id_Or_Email:
-          originalTransaction.transactionType === 'income' ? idOrEmail : undefined,
-      };
-      transactions.push(transactionData);
+    }
+
+    // Create new transactions if any
+    if (transactions.some((t) => !('_id' in t))) {
+      const newTransactions = transactions.filter((t) => !('_id' in t));
+      const createdTransactions = await TransactionModel.insertMany(newTransactions, {
+        session: activeSession,
+      });
+      transactions.splice(
+        0,
+        transactions.length,
+        ...createdTransactions,
+        ...transactions.filter((t) => '_id' in t),
+      );
+    }
+
+    // Update group: reset reDistributeAmount and redistributeTransactionCode
+    group.reDistributeAmount = 0;
+    group.redistributeTransactionCode = null;
+    await group.save({ session: activeSession });
+
+    // Commit transaction if we started it
+    if (localSession) {
+      await localSession.commitTransaction();
+    }
+
+    return {transactions:transactions, message: 'Redistribution successful', success: true};
+  } catch (error: any) {
+    // Abort transaction if we started it
+    if (localSession) {
+      await localSession.abortTransaction();
+    }
+    console.error('Redistribution failed:', error);
+    throw new Error(error.message || 'Failed to redistribute amount among members.');
+  } finally {
+    // End session if we started it
+    if (localSession) {
+      localSession.endSession();
+      console.log('Session ended');
     }
   }
-
-  // Create new transactions if any
-  if (transactions.some((t) => !('_id' in t))) {
-    const newTransactions = transactions.filter((t) => !('_id' in t));
-    const createdTransactions = await TransactionModel.insertMany(newTransactions);
-    transactions.splice(0, transactions.length, ...createdTransactions, ...transactions.filter((t) => '_id' in t));
-  }
-
-  // Update group: reset reDistributeAmount and redistributeTransactionCode
-  group.reDistributeAmount = 0;
-  group.redistributeTransactionCode = null;
-  await group.save();
-
-  return transactions;
 };
+
 
 
 const incomeAndExpensesService = {
