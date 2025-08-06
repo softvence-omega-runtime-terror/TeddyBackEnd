@@ -43,34 +43,60 @@ export type TPersonalIncomeTypes = {
 
 export type TExpense = {
   transactionType: 'expense';
-  transaction_Code:string;
+  transaction_Code: string;
   currency: string;
   date: string;
   amount: number;
-  distribution_type: 'equal' | 'custom' | null;
+  shareWith: "all" | "custom" | "none"; // Indicates how the expense is shared
+  perticipated_members?: [string]; // List of member IDs who participated in the expense
+  slice_type: 'equal' | 'custom' | null;
+  members_Share_list?: {
+    member_email: Types.ObjectId;
+    share_amount: number;
+  }[];
+  contribution_type?: "allClear" | "custom"; // Optional, used for custom slice type
+  contribution_list?: [{
+    member_email: Types.ObjectId;
+    contributed_amount: number;
+  }];
+  inDebt?: boolean; // Indicates if the user is in debt for this expense
+  borrowedOrLendAmount?: number; // Amount of debt if applicable
   description?: string;
   type_id: Types.ObjectId;
   user_id: Types.ObjectId;
   isGroupTransaction: boolean;
   group_id?: Types.ObjectId | null;
-  spender_id_Or_Email: Types.ObjectId | string| null;
+  spender_id_Or_Email: Types.ObjectId | string | null;
   earnedBy_id_Or_Email?: never;
   typeModel: 'TPersonalExpenseTypes';
 };
 
 export type TIncome = {
   transactionType: 'income';
-  transaction_Code:string;
+  transaction_Code: string;
   currency: string;
   date: string;
   amount: number;
-  distribution_type: 'equal' | 'custom' | null;
-  description: string;
+  shareWith: "all" | "custom" | "none"; // Indicates how the income is shared
+  perticipated_members?: [string]; // List of member IDs who participated in the income
+  slice_type: 'equal' | 'custom' | null;
+  members_Share_list?: {
+    member_email: Types.ObjectId;
+    share_amount: number;
+  }[];
+  contribution_type?: "allClear" | "custom"; // Optional, used for custom slice type
+  contribution_list?: [{
+    member_email: Types.ObjectId;
+    contributed_amount: number;
+  }];
+  inDebt?: boolean; // Indicates if the user is in debt for this income
+  borrowedOrLendAmount?: number; // Amount of debt if applicable
+  description?: string;
   type_id: Types.ObjectId;
   user_id: Types.ObjectId;
   isGroupTransaction: boolean;
   group_id?: Types.ObjectId | null;
   spender_id_Or_Email?: never;
-  earnedBy_id_Or_Email: Types.ObjectId | string| null ;
+  earnedBy_id_Or_Email: Types.ObjectId | string | null;
   typeModel: 'TPersonalIncomeTypes';
 };

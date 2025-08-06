@@ -61,7 +61,7 @@ interface DistributionMember {
   spentOrEarnedAmount?: number;
 }
 interface Payload {
-  distribution_type: 'equal' | 'custom';
+  slice_type: 'equal' | 'custom';
   distributionAmong: DistributionMember[];
   isDiscard?: boolean;
 }
@@ -770,7 +770,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     type_id,
     isGroupTransaction,
     group_id,
-    distribution_type,
+    slice_type,
     distributionAmong,
   } = payload;
   let amount = payload.amount || 0; // Default to 0 if not provided
@@ -825,7 +825,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       currency,
       date,
       amount,
-      distribution_type: null,
+      slice_type: null,
       description,
       type_id: idConverter(type_id) as Types.ObjectId,
       user_id,
@@ -846,8 +846,8 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     if (!group_id) {
       throw new Error('group_id is required for group transactions');
     }
-    if (!distribution_type) {
-      throw new Error('distribution_type is required for group transactions');
+    if (!slice_type) {
+      throw new Error('slice_type is required for group transactions');
     }
 
     const group = await ExpenseOrIncomeGroupModel.findOne({
@@ -879,7 +879,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       (member) => !member.isDeleted,
     );
 
-    if (distribution_type === 'equal') {
+    if (slice_type === 'equal') {
       if (!amount) {
         throw new Error('amount is required for equal distribution');
       }
@@ -914,7 +914,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         ...member,
         amount: amountPerMember,
       }));
-    } else if (distribution_type === 'custom') {
+    } else if (slice_type === 'custom') {
       // Require distributionAmong with spentOrEarnedAmount
       if (!distributionAmong || distributionAmong.length === 0) {
         throw new Error(
@@ -976,7 +976,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         }),
       );
     } else {
-      throw new Error('Invalid distribution_type: must be "equal" or "custom"');
+      throw new Error('Invalid slice_type: must be "equal" or "custom"');
     }
 
     // Create a transaction for each member using the same transaction_Code
@@ -991,7 +991,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         currency,
         date,
         amount: member.amount || 0,
-        distribution_type,
+        slice_type,
         description,
         type_id: idConverter(type_id) as Types.ObjectId,
         user_id,
@@ -1091,7 +1091,7 @@ const getAllIncomeAndExpenses = async (
     date: t.date,
     description: t.description,
     transactionType: t.transactionType,
-    distribution_type: t.distribution_type,
+    slice_type: t.slice_type,
     type_id: t.type_id,
     isGroupTransaction: t.isGroupTransaction,
     group_id: t.group_id,
@@ -1321,11 +1321,11 @@ const getGroupMembers = async (group_id: Types.ObjectId) => {
   return redistributableMembers;
 };
 // const reDistributeAmountAmongMember = async (user_id: Types.ObjectId, group_id: Types.ObjectId, payload: Payload): Promise<Document[]> => {
-//   const { distribution_type, distributionAmong, isDiscurd } = payload;
+//   const { slice_type, distributionAmong, isDiscurd } = payload;
 
 //   // Validate payload
-//   if (!distribution_type || !['equal', 'custom'].includes(distribution_type)) {
-//     throw new Error('distribution_type must be "equal" or "custom"');
+//   if (!slice_type || !['equal', 'custom'].includes(slice_type)) {
+//     throw new Error('slice_type must be "equal" or "custom"');
 //   }
 //   if (!distributionAmong || distributionAmong.length === 0) {
 //     throw new Error('distributionAmong must contain at least one member');
@@ -1371,13 +1371,13 @@ const getGroupMembers = async (group_id: Types.ObjectId) => {
 
 //   // Prepare members to distribute
 //   let membersToDistribute: Array<{ memberEmail: string; amount: number }> = [];
-//   if (distribution_type === 'equal') {
+//   if (slice_type === 'equal') {
 //     const amountPerMember = amount / distributionAmong.length; // Allow fractional amounts
 //     membersToDistribute = distributionAmong.map((member) => ({
 //       memberEmail: member.memberEmail,
 //       amount: amountPerMember,
 //     }));
-//   } else if (distribution_type === 'custom') {
+//   } else if (slice_type === 'custom') {
 //     for (const member of distributionAmong) {
 //       if (typeof member.spentOrEarnedAmount !== 'number') {
 //         throw new Error(
@@ -1457,7 +1457,7 @@ const getGroupMembers = async (group_id: Types.ObjectId) => {
 //         currency: originalTransaction.currency,
 //         date: originalTransaction.date,
 //         amount: member.amount,
-//         distribution_type,
+//         slice_type,
 //         description: originalTransaction.description,
 //         type_id: new Types.ObjectId(originalTransaction.type_id),
 //         user_id: new Types.ObjectId(group.user_id),
@@ -1496,7 +1496,7 @@ const reDistributeAmountAmongMember = async (
   payload: Payload,
   session?: ClientSession, // Optional session for transaction
 ) => {
-  const { distribution_type, distributionAmong, isDiscard } = payload;
+  const { slice_type, distributionAmong, isDiscard } = payload;
 
   // Start a transaction if no session is provided
   let localSession: ClientSession | null = null;
@@ -1535,8 +1535,8 @@ const reDistributeAmountAmongMember = async (
     }
 
     // Validate payload for non-discard case
-    if (!distribution_type || !['equal', 'custom'].includes(distribution_type)) {
-      throw new Error('distribution_type must be "equal" or "custom"');
+    if (!slice_type || !['equal', 'custom'].includes(slice_type)) {
+      throw new Error('slice_type must be "equal" or "custom"');
     }
     if (!distributionAmong || distributionAmong.length === 0) {
       throw new Error('distributionAmong must contain at least one member');
@@ -1586,13 +1586,13 @@ const reDistributeAmountAmongMember = async (
 
     // Prepare members to distribute
     let membersToDistribute: Array<{ memberEmail: string; amount: number }> = [];
-    if (distribution_type === 'equal') {
+    if (slice_type === 'equal') {
       const amountPerMember = amount / distributionAmong.length; // Allow fractional amounts
       membersToDistribute = distributionAmong.map((member) => ({
         memberEmail: member.memberEmail,
         amount: amountPerMember,
       }));
-    } else if (distribution_type === 'custom') {
+    } else if (slice_type === 'custom') {
       for (const member of distributionAmong) {
         if (typeof member.spentOrEarnedAmount !== 'number') {
           throw new Error(
@@ -1680,7 +1680,7 @@ const reDistributeAmountAmongMember = async (
           currency: originalTransaction.currency,
           date: originalTransaction.date,
           amount: member.amount,
-          distribution_type,
+          slice_type,
           description: originalTransaction.description,
           type_id: new Types.ObjectId(originalTransaction.type_id),
           user_id: new Types.ObjectId(group.user_id),
