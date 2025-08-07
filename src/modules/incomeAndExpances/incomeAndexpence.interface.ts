@@ -41,24 +41,31 @@ export type TPersonalIncomeTypes = {
   ];
 };
 
+
+export type GroupsEachTransactionSummary={
+amount: number;
+  shareWith: "all" | "custom" | "none"; // Indicates how the expense is shared
+  perticipated_members: [string]; // List of member IDs who participated in the expense
+  slice_type: 'equal' | 'custom' | null;
+  members_Share_list: {
+    member_email: Types.ObjectId | string;
+    share_amount: number;
+  }[];
+  contribution_type: "allClear" | "custom"; // Optional, used for custom slice type
+  contribution_list: [{
+    member_email: Types.ObjectId | string;
+    contributed_amount: number;
+  }];
+  reDistributableAmount:number
+  fractionalTransaction_id:[Types.ObjectId]
+}
+
 export type TExpense = {
   transactionType: 'expense';
   transaction_Code: string;
   currency: string;
   date: string;
   amount: number;
-  shareWith: "all" | "custom" | "none"; // Indicates how the expense is shared
-  perticipated_members?: [string]; // List of member IDs who participated in the expense
-  slice_type: 'equal' | 'custom' | null;
-  members_Share_list?: {
-    member_email: Types.ObjectId;
-    share_amount: number;
-  }[];
-  contribution_type?: "allClear" | "custom"; // Optional, used for custom slice type
-  contribution_list?: [{
-    member_email: Types.ObjectId;
-    contributed_amount: number;
-  }];
   inDebt?: boolean; // Indicates if the user is in debt for this expense
   borrowedOrLendAmount?: number; // Amount of debt if applicable
   description?: string;
@@ -77,18 +84,6 @@ export type TIncome = {
   currency: string;
   date: string;
   amount: number;
-  shareWith: "all" | "custom" | "none"; // Indicates how the income is shared
-  perticipated_members?: [string]; // List of member IDs who participated in the income
-  slice_type: 'equal' | 'custom' | null;
-  members_Share_list?: {
-    member_email: Types.ObjectId;
-    share_amount: number;
-  }[];
-  contribution_type?: "allClear" | "custom"; // Optional, used for custom slice type
-  contribution_list?: [{
-    member_email: Types.ObjectId;
-    contributed_amount: number;
-  }];
   inDebt?: boolean; // Indicates if the user is in debt for this income
   borrowedOrLendAmount?: number; // Amount of debt if applicable
   description?: string;
