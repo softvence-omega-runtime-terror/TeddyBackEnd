@@ -41,36 +41,57 @@ export type TPersonalIncomeTypes = {
   ];
 };
 
+
+export type GroupsEachTransactionSummary={
+amount: number;
+  shareWith: "all" | "custom" | "none"; // Indicates how the expense is shared
+  perticipated_members: [string]; // List of member IDs who participated in the expense
+  slice_type: 'equal' | 'custom' | null;
+  members_Share_list: {
+    member_email: Types.ObjectId | string;
+    share_amount: number;
+  }[];
+  contribution_type: "allClear" | "custom"; // Optional, used for custom slice type
+  contribution_list: [{
+    member_email: Types.ObjectId | string;
+    contributed_amount: number;
+  }];
+  reDistributableAmount:number
+  fractionalTransaction_id:[Types.ObjectId]
+}
+
 export type TExpense = {
   transactionType: 'expense';
-  transaction_Code:string;
+  transaction_Code: string;
   currency: string;
   date: string;
   amount: number;
-  distribution_type: 'equal' | 'custom' | null;
+  inDebt?: boolean; // Indicates if the user is in debt for this expense
+  borrowedOrLendAmount?: number; // Amount of debt if applicable
   description?: string;
   type_id: Types.ObjectId;
   user_id: Types.ObjectId;
   isGroupTransaction: boolean;
   group_id?: Types.ObjectId | null;
-  spender_id_Or_Email: Types.ObjectId | string| null;
+  spender_id_Or_Email: Types.ObjectId | string | null;
   earnedBy_id_Or_Email?: never;
   typeModel: 'TPersonalExpenseTypes';
 };
 
 export type TIncome = {
   transactionType: 'income';
-  transaction_Code:string;
+  transaction_Code: string;
   currency: string;
   date: string;
   amount: number;
-  distribution_type: 'equal' | 'custom' | null;
-  description: string;
+  inDebt?: boolean; // Indicates if the user is in debt for this income
+  borrowedOrLendAmount?: number; // Amount of debt if applicable
+  description?: string;
   type_id: Types.ObjectId;
   user_id: Types.ObjectId;
   isGroupTransaction: boolean;
   group_id?: Types.ObjectId | null;
   spender_id_Or_Email?: never;
-  earnedBy_id_Or_Email: Types.ObjectId | string| null ;
+  earnedBy_id_Or_Email: Types.ObjectId | string | null;
   typeModel: 'TPersonalIncomeTypes';
 };

@@ -1,46 +1,11 @@
-import {  Schema, Types, model} from 'mongoose';
+import { Schema, Types, model } from 'mongoose';
 import { Document } from 'mongoose';
-import {  TExpenseOrIncomeGroup } from './incomeAndexpence.interface';
+import { TExpenseOrIncomeGroup, TPersonalExpenseTypes, TPersonalIncomeTypes, TExpense, TIncome, GroupsEachTransactionSummary } from './incomeAndexpence.interface';
 
 // Type for the Transaction document (union of TExpense and TIncome)
-type TransactionDocument = Document & (
-  | {
-      transactionType: 'expense';
-      transaction_Code:string;
-      currency: string;
-      date: string;
-      amount: number;
-      distribution_type: 'equal' | 'custom' | null;
-      description?: string;
-      type_id: Types.ObjectId;
-      user_id: Types.ObjectId;
-      isGroupTransaction: boolean;
-      group_id?: Types.ObjectId;
-      spender_id_Or_Email: Types.ObjectId | string;
-      earnedBy_id_Or_Email?: never;
-      typeModel: 'TPersonalExpenseTypes';
-    }
-  | {
-      transactionType: 'income';
-      transaction_Code:string;
-      currency: string;
-      date: string;
-      amount: number;
-      distribution_type: 'equal' | 'custom' | null;
-      description: string;
-      type_id: Types.ObjectId;
-      user_id: Types.ObjectId;
-      isGroupTransaction: boolean;
-      group_id?: Types.ObjectId;
-      spender_id_Or_Email?: never;
-      earnedBy_id_Or_Email: Types.ObjectId | string;
-      typeModel: 'TPersonalIncomeTypes';
-    }
-);
+type TransactionDocument = Document & (TExpense | TIncome);
 
-
-
-// Expense Group Schema
+// Expense or Income Group Schema
 const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
   {
     user_id: {
@@ -57,8 +22,16 @@ const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
       enum: ['expense', 'income'],
       required: true,
     },
-    reDistributeAmount:{type: Number, required: false, default: 0},
-    redistributeTransactionCode: { type: String, required: false , default:null},
+    reDistributeAmount: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    redistributeTransactionCode: {
+      type: String,
+      required: false,
+      default: null,
+    },
     groupMemberList: {
       type: [
         {
@@ -67,20 +40,23 @@ const expenseOrIncomeGroup = new Schema<TExpenseOrIncomeGroup>(
           existOnPlatform: { type: Boolean, required: false, default: false },
           isInvitationEmailSent: { type: Boolean, required: false, default: false },
           name: { type: String, required: false },
-          isDeleted: { type: Boolean, required: false, default: false }, // Optional, to mark if the member is deleted
+          isDeleted: { type: Boolean, required: false, default: false },
         },
       ],
       required: true,
       default: [],
     },
-    isDeleted:{type: Boolean, required: false, default: false}, // Optional, to mark if the group is deleted
+    isDeleted: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   { timestamps: true }
 );
 
-
 // Personal Expense Types Schema
-const personalExpenseTypesSchema = new Schema(
+const personalExpenseTypesSchema = new Schema<TPersonalExpenseTypes>(
   {
     user_id: {
       type: Schema.Types.ObjectId,
@@ -94,15 +70,15 @@ const personalExpenseTypesSchema = new Schema(
           name: { type: String, required: true },
         },
       ],
-      required: false,
+      required: true,
       default: [],
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 // Personal Income Types Schema
-const personalIncomeTypesSchema = new Schema(
+const personalIncomeTypesSchema = new Schema<TPersonalIncomeTypes>(
   {
     user_id: {
       type: Schema.Types.ObjectId,
@@ -116,11 +92,68 @@ const personalIncomeTypesSchema = new Schema(
           name: { type: String, required: true },
         },
       ],
-      required: false,
+      required: true,
       default: [],
     },
   },
-  { timestamps: true },
+  { timestamps: true }
+);
+
+// Groups Each Transaction Summary Schema
+const groupsEachTransactionSummarySchema = new Schema<GroupsEachTransactionSummary>(
+  {
+    amount: {
+      type: Number,
+      required: true,
+    },
+    shareWith: {
+      type: String,
+      enum: ['all', 'custom', 'none'],
+      required: true,
+    },
+    perticipated_members: {
+      type: [String],
+      required: true,
+    },
+    slice_type: {
+      type: String,
+      enum: ['equal', 'custom', null],
+      required: false,
+    },
+    members_Share_list: {
+      type: [
+        {
+          member_email: { type: Schema.Types.Mixed, required: true },
+          share_amount: { type: Number, required: true },
+        },
+      ],
+      required: true,
+    },
+    contribution_type: {
+      type: String,
+      enum: ['allClear', 'custom'],
+      required: true,
+    },
+    contribution_list: {
+      type: [
+        {
+          member_email: { type: Schema.Types.Mixed, required: true },
+          contributed_amount: { type: Number, required: true },
+        },
+      ],
+      required: true,
+    },
+    reDistributableAmount: {
+      type: Number,
+      required: true,
+    },
+    fractionalTransaction_id: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Transaction',
+      required: true,
+    },
+  },
+  { timestamps: true }
 );
 
 // Common Transaction Schema for Expenses and Incomes
@@ -147,16 +180,18 @@ const transactionSchema = new Schema<TransactionDocument>(
       type: Number,
       required: true,
     },
-    distribution_type: {
-      type: String,
-      enum: ['equal', 'custom', null],
+    inDebt: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    borrowedOrLendAmount: {
+      type: Number,
       required: false,
     },
     description: {
       type: String,
-      required: function (this: TransactionDocument) {
-        return this.transactionType === 'income';
-      },
+      required: false,
     },
     type_id: {
       type: Schema.Types.ObjectId,
@@ -175,7 +210,7 @@ const transactionSchema = new Schema<TransactionDocument>(
     },
     group_id: {
       type: Schema.Types.ObjectId,
-      ref: 'ExpenseGroup',
+      ref: 'ExpenseGroupOrIncomeGroup',
       required: function (this: TransactionDocument) {
         return this.isGroupTransaction === true;
       },
@@ -202,7 +237,7 @@ const transactionSchema = new Schema<TransactionDocument>(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  },
+  }
 );
 
 // Pre-save hook to set typeModel based on transactionType
@@ -216,11 +251,8 @@ transactionSchema.pre('save', function (next) {
 });
 
 // Create and export models
-export const ExpenseOrIncomeGroupModel = model('ExpenseGroupOrIncomeGroup', expenseOrIncomeGroup);
-export const ExpenseTypesModel = model('TPersonalExpenseTypes', personalExpenseTypesSchema);
-export const IncomeTypesModel = model('TPersonalIncomeTypes', personalIncomeTypesSchema);
+export const ExpenseOrIncomeGroupModel = model<TExpenseOrIncomeGroup>('ExpenseGroupOrIncomeGroup', expenseOrIncomeGroup);
+export const ExpenseTypesModel = model<TPersonalExpenseTypes>('TPersonalExpenseTypes', personalExpenseTypesSchema);
+export const IncomeTypesModel = model<TPersonalIncomeTypes>('TPersonalIncomeTypes', personalIncomeTypesSchema);
+export const GroupsEachTransactionSummaryModel = model<GroupsEachTransactionSummary>('GroupsEachTransactionSummary', groupsEachTransactionSummarySchema);
 export const TransactionModel = model<TransactionDocument>('Transaction', transactionSchema);
-
-// C7-07232025
-
-// ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKrcGxEgsvHvsJoETpmrhVnXvoddDiJQIyfAJq0NFyJ8 habibrifatx21@gmail.com
