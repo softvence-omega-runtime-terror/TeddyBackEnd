@@ -3,6 +3,7 @@ import authRouter from '../modules/auth/auth.routes';
 import userRoutes from '../modules/user/user.routes';
 import messageRouter from '../modules/message/message.routes';
 import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpence.route';
+import reportRoutes from '../modules/report/report.route';
 
 
 const Routes = express.Router();
@@ -24,6 +25,10 @@ const moduleRouts = [
     path: '/incomeAndExpences',
     router: incomeAndExpenseRouter,
   },
+  {
+    path: '/report',
+    router: reportRoutes,
+  }
 ];
 
 moduleRouts.forEach(({ path, router }) => {
