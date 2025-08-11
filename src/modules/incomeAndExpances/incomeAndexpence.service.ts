@@ -491,12 +491,13 @@ const createOrUpdateExpenseOrIncomeGroup = async (
     }
 
     // Increment totalCreatedGroups for new groups
-    if (!group_id && group.createdAt === group.updatedAt) {
-      await ProfileModel.updateOne(
+    if (!group_id) {
+      const updateResult = await ProfileModel.updateOne(
         { user_id },
         { $inc: { totalCreatedGroups: 1 } },
         { session },
       );
+      console.log('Increment totalCreatedGroups result:', updateResult, 'user_id:', user_id);
     }
 
     await session.commitTransaction();
@@ -1004,7 +1005,6 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         if (!member.member_email) {
           throw new Error('member_email is required for each entry in members_Share_list');
         }
-        // CHANGED: Updated validation to avoid safeIdConverter on non-ObjectId member_email
         const email = activeMembers.find(
           (m) =>
             m.email === member.member_email ||
@@ -1028,7 +1028,6 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
           `Total share_amount (${totalShareAmount}) does not match transaction amount (${amount})`,
         );
       }
-      // CHANGED: Conditionally apply safeIdConverter based on isValidObjectId
       finalMembersShareList = members_Share_list.map((member: { member_email: string | Types.ObjectId; share_amount: number }) => ({
         member_email: isValidObjectId(member.member_email)
           ? safeIdConverter(member.member_email)
@@ -1055,7 +1054,6 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         if (!contribution.member_email) {
           throw new Error('member_email is required for each entry in contribution_list');
         }
-        // CHANGED: Updated validation to avoid safeIdConverter on non-ObjectId member_email
         const email = activeMembers.find(
           (m) =>
             m.email === contribution.member_email ||
@@ -1077,13 +1075,21 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
           `Total contributed_amount (${totalContributedAmount}) does not match transaction amount (${amount})`,
         );
       }
-      // CHANGED: Conditionally apply safeIdConverter based on isValidObjectId
-      finalContributionList = contribution_list.map((contribution: { member_email: string | Types.ObjectId; contributed_amount: number }) => ({
-        member_email: isValidObjectId(contribution.member_email)
-          ? safeIdConverter(contribution.member_email)
-          : contribution.member_email,
-        contributed_amount: contribution.contributed_amount,
-      }));
+      // Ensure all participated members are accounted for in contribution_list
+      finalContributionList = finalPerticipatedMembers.map((email) => {
+        const contribution = contribution_list.find(
+          (c : any) =>
+            c.member_email === email ||
+            (isValidObjectId(c.member_email) && activeMembers.find((m) => m.email === email)?.member_id?.toString() === c.member_email.toString()),
+        );
+        const member = activeMembers.find((m) => m.email === email);
+        return {
+          member_email: member?.member_id && isValidObjectId(member.member_id)
+            ? safeIdConverter(member.member_id)
+            : email,
+          contributed_amount: contribution ? contribution.contributed_amount : 0,
+        };
+      });
     } else {
       throw new Error('Invalid contribution_type: must be "allClear" or "custom"');
     }
