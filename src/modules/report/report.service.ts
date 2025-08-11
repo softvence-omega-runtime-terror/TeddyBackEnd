@@ -2,17 +2,6 @@ import mongoose from 'mongoose';
 import { getRangeFromQuery } from './report.utils';
 import { TransactionModel } from '../incomeAndExpances/incomeAndexpence.model';
 
-interface TotalsGroup {
-  _id: 'income' | 'expense' | string;
-  total: number;
-}
-
-interface CategoryGroup {
-  _id: string;
-  transactionType: 'income' | 'expense';
-  total: number;
-}
-
 interface TransactionItem {
   _id: string;
   transaction_Code: string;
@@ -21,22 +10,18 @@ interface TransactionItem {
   date: string;
   description?: string;
   typeName?: string;
+  inDebt: boolean;
+  borrowedOrLendAmount: number;
+  debtType: 'borrowed' | 'lent';
 }
 
 interface GroupedPeriod {
-  _id: string | number; // e.g., '2025-07-22' or ISO week number
+  _id: string | number;
   total: number;
   transactions: TransactionItem[];
 }
 
-interface MonthlyReportResult {
-  totals: TotalsGroup[];
-  byCategory: CategoryGroup[];
-  daily: GroupedPeriod[];
-  weekly: GroupedPeriod[];
-  monthly: GroupedPeriod[];
-  transactions: TransactionItem[];
-}
+// ... other interfaces
 
 export async function getMonthlyReport(userId: string, query: any) {
   const { start, end } = getRangeFromQuery(query);
@@ -85,6 +70,11 @@ export async function getMonthlyReport(userId: string, query: any) {
                   amount: '$amount',
                   description: '$description',
                   typeName: '$typeName',
+                  inDebt: '$inDebt',
+                  borrowedOrLendAmount: '$borrowedOrLendAmount',
+                  debtType: {
+                    $cond: { if: '$inDebt', then: 'borrowed', else: 'lent' },
+                  },
                 },
               },
             },
@@ -98,7 +88,7 @@ export async function getMonthlyReport(userId: string, query: any) {
                 $dateTrunc: {
                   date: '$dateObj',
                   unit: 'week',
-                  startOfWeek: 'monday', // or 'sunday' if you prefer
+                  startOfWeek: 'monday',
                 },
               },
               weekEndDate: {
@@ -131,6 +121,11 @@ export async function getMonthlyReport(userId: string, query: any) {
                   amount: '$amount',
                   description: '$description',
                   typeName: '$typeName',
+                  inDebt: '$inDebt',
+                  borrowedOrLendAmount: '$borrowedOrLendAmount',
+                  debtType: {
+                    $cond: { if: '$inDebt', then: 'borrowed', else: 'lent' },
+                  },
                 },
               },
             },
@@ -151,6 +146,11 @@ export async function getMonthlyReport(userId: string, query: any) {
                   amount: '$amount',
                   description: '$description',
                   typeName: '$typeName',
+                  inDebt: '$inDebt',
+                  borrowedOrLendAmount: '$borrowedOrLendAmount',
+                  debtType: {
+                    $cond: { if: '$inDebt', then: 'borrowed', else: 'lent' },
+                  },
                 },
               },
             },
@@ -168,6 +168,11 @@ export async function getMonthlyReport(userId: string, query: any) {
               date: 1,
               description: 1,
               typeName: 1,
+              inDebt: 1,
+              borrowedOrLendAmount: 1,
+              debtType: {
+                $cond: { if: '$inDebt', then: 'borrowed', else: 'lent' },
+              },
             },
           },
         ],
@@ -175,11 +180,10 @@ export async function getMonthlyReport(userId: string, query: any) {
     },
   ];
 
-  const [result] =
-    await TransactionModel.aggregate<MonthlyReportResult>(pipeline);
+  const [result] = await TransactionModel.aggregate(pipeline);
 
   const totals: Record<string, number> = { income: 0, expense: 0 };
-  (result.totals || []).forEach((t) => {
+  (result.totals || []).forEach((t : any) => {
     totals[t._id] = t.total;
   });
 
