@@ -4,6 +4,7 @@ import userRoutes from '../modules/user/user.routes';
 import messageRouter from '../modules/message/message.routes';
 import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpence.route';
 import reportRoutes from '../modules/report/report.route';
+import historyRoutes from '../modules/history/history.route';
 
 
 const Routes = express.Router();
@@ -28,6 +29,10 @@ const moduleRouts = [
   {
     path: '/report',
     router: reportRoutes,
+  },
+  {
+    path: '/history',
+    router: historyRoutes,
   }
 ];
 
