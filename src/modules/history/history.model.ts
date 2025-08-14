@@ -8,7 +8,8 @@ export interface IHistory extends Document {
 
 const historySchema = new Schema<IHistory>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'UserCollection', required: true },
+    // userId: { type: Schema.Types.ObjectId, ref: 'UserCollection', required: true },
+    userId: { type: Schema.Types.ObjectId, required: true },
     human: { type: String, required: true },
     assistant: { type: String, required: true }
   },

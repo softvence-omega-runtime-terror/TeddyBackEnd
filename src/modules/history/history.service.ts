@@ -1,18 +1,30 @@
 import { History } from "./history.model";
 import { Types } from "mongoose";
 
-export const createHistoryService = async (
-  userId: Types.ObjectId,
-  human: string,
-  assistant: string
-) => {
-  const newHistory = await History.create({ userId, human, assistant });
-  return newHistory;
+interface CreateHistoryInput {
+  userId: string;
+  human: string;
+  assistant: string;
+}
+
+export const createHistory = async ({ userId, human, assistant }: CreateHistoryInput) => {
+  if (!Types.ObjectId.isValid(userId)) {
+    throw new Error("Invalid userId format");
+  }
+
+  const newHistory = new History({
+    userId,
+    human,
+    assistant,
+  });
+
+  return await newHistory.save();
 };
 
-export const getUserHistoryService = async (userId: Types.ObjectId) => {
-  const history = await History.find({ userId })
-    .populate("userId", "name email")
-    .sort({ createdAt: -1 });
-  return history;
+export const getHistoryByUserId = async (userId: string) => {
+  if (!Types.ObjectId.isValid(userId)) {
+    throw new Error("Invalid userId format");
+  }
+
+  return await History.find({ userId }).sort({ createdAt: -1 });
 };
