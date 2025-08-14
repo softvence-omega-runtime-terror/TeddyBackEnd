@@ -1,34 +1,40 @@
 import { Request, Response } from "express";
-import { Types } from "mongoose";
-import {
-  createHistoryService,
-  getUserHistoryService
-} from "./history.service";
-import catchAsync from "../../util/catchAsync";
-import sendResponse from "../../util/sendResponse";
+import { History } from "./history.model";
 
-export const postHistory = catchAsync(async (req: Request, res: Response) => {
-  const userId = new Types.ObjectId((req as any).user.id);
-  const { human, assistant } = req.body;
+export const postHistory = async (req: Request, res: Response) => {
+  try {
+    const { userId, human, assistant } = req.body;
 
-  const newHistory = await createHistoryService(userId, human, assistant);
+    if (!userId || !human || !assistant) {
+      res.status(400).json({ message: "Missing required fields" });
+      return
+    }
 
-  sendResponse(res, {
-    statusCode: 201,
-    success: true,
-    message: "History created successfully",
-    data: newHistory
-  });
-});
+    const newHistory = new History({
+      userId,
+      human,
+      assistant
+    });
 
-export const getHistory = catchAsync(async (req: Request, res: Response) => {
-  const userId = new Types.ObjectId((req as any).user.id);
-  const history = await getUserHistoryService(userId);
+    await newHistory.save();
+    res.status(201).json(newHistory);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
 
-  sendResponse(res, {
-    statusCode: 200,
-    success: true,
-    message: "User history fetched successfully",
-    data: history
-  });
-});
+export const getHistory = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId || typeof userId !== 'string') {
+      res.status(400).json({ message: "Missing or invalid userId in query" });
+      return;
+    }
+
+    const history = await History.find({ userId }).sort({ createdAt: -1 }); // newest first
+    res.status(200).json(history);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
