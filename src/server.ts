@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import app from "./app";
 import { Server } from "http";
 import config from "./config";
-// import adminSeeder from "./seeder/adminSeeder";
+import adminSeeder from "./seeder/adminSeeder";
 import { setupWebSocket } from './util/webSocket';
 
 let server: Server;
@@ -11,7 +11,7 @@ async function main() {
   try {
     console.log("connecting to mongodb....⏳");
     await mongoose.connect(config.mongoose_uri);
-    // await adminSeeder()
+    await adminSeeder()
     server = app.listen(config.port, () => {
       console.log(`Teddy server app listening on port ${config.port}`);
     });
