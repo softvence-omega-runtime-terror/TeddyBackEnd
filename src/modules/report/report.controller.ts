@@ -3,7 +3,15 @@ import * as ReportsService from './report.service';
 
 export async function getMonthlyReport(req: Request, res: Response) {
   try {
-    const userId = (req as any).user.id; // from auth middleware
+    // const userId = (req as any).user.id; // from auth middleware
+
+    const userId = (req as any).user?.id || (req.query.userId as string); // Fallback to query
+
+    if (!userId) {
+      res.status(400).json({ success: false, message: 'User ID is required' });
+      return;
+    }
+
     const report = await ReportsService.getMonthlyReport(userId, req.query);
     res.json({ success: true, ...report });
   } catch (err: any) {
