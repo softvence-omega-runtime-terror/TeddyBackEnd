@@ -10,179 +10,9 @@ import { userRole } from '../../constants';
 import updateGroupAndTransactions from './userUtill';
 import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
 
-// const createUser = async (
-//   payload: Partial<TUser>,
-//   file?: any,
-//   method?: string,
-// ) => {
+const createUser = async (payload: Partial<TUser>) => {
+  console.log('here is the payload', payload);
 
-
-//   console.log("here is the payload",payload)
-
-
-//   // Validate password match
-//   if (payload.password !== payload.confirmPassword) {
-//     throw new Error('Password and confirm password do not match.');
-//   }
-
-//   // Validate terms agreement
-//   if (!payload.agreedToTerms) {
-//     throw new Error('You must agree to the terms and conditions to register.');
-//   }
-
-//   // Check for existing user
-//   // console.log('Checking if user exists');
-//   const existingUser = await UserModel.findOne({ email: payload.email }).select(
-//     '+password',
-//   );
-//   if (existingUser && !existingUser.isDeleted) {
-//     throw new Error('A user with this email already exists and is active.');
-//   }
-
-//   // Create new payload with default role
-//   const userPayload = {
-//     ...payload,
-//     role: payload.role || userRole.user,
-//   };
-
-//   // Remove confirmPassword from payload
-//   const { confirmPassword, ...userData } = userPayload;
-
-//   // console.log('User to be created:', userPayload);
-
-//   // Check MongoDB connection state
-//   if (mongoose.connection.readyState !== 1) {
-//     console.error(
-//       'MongoDB connection not ready, state:',
-//       mongoose.connection.readyState,
-//     );
-//     throw new Error('MongoDB connection is not ready.');
-//   }
-
-//   const session = await mongoose.startSession();
-
-//   try {
-//     await session.startTransaction();
-//     // console.log('Transaction started');
-
-//     let imageUrl: string | undefined;
-
-//     // Optional: Upload image to Cloudinary if file is provided
-//     if (file?.path) {
-//       const imageName = `${userData.email}-${Date.now()}`;
-//       const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-//       imageUrl = uploadResult.secure_url;
-//       console.log('Image uploaded to Cloudinary:', imageUrl);
-//     } else {
-//       console.log('No image file provided, skipping upload');
-//     }
-
-//     // Add image URL to userData if available
-//     const userDataWithImg = {
-//       ...userData,
-//       ...(imageUrl && { img: imageUrl }),
-//     };
-
-//     let user;
-
-//     // Create user
-//     if (method) {
-//       console.log('Creating user with create method');
-//       const created = await UserModel.create([userDataWithImg], { session });
-//       user = created[0];
-//     } else {
-//       console.log('Creating user with new/save method');
-//       user = new UserModel({ ...userDataWithImg });
-//       await user.save({ session });
-//     }
-
-//     console.log('User created:', user._id);
-
-//     // Create profile with image URL (or undefined if no image)
-//     console.log('Creating profile');
-//     const profileCreation = await ProfileModel.create(
-//       [
-//         {
-//           name: userData.name ?? 'user',
-//           phone: userData.phone,
-//           email: userData.email!,
-//           user_id: user._id,
-//           img: imageUrl, // Include Cloudinary image URL or undefined
-//         },
-//       ],
-//       { session },
-//     );
-
-//     console.log('Profile created:', profileCreation[0]._id);
-
-//     // Commit the transaction
-//     await session.commitTransaction();
-//     console.log('Transaction committed');
-
-//     // Fetch the user after transaction
-//     const fetchedUser = await UserModel.findOne({
-//       email: userData.email,
-//     }).select('-password');
-//     if (!fetchedUser) {
-//       throw new Error('User created but not found after transaction.');
-//     }
-
-//     // Send OTP
-//     console.log('Sending OTP via email');
-//     const token = await authUtil.sendOTPViaEmail(fetchedUser);
-
-//     return {
-//       success: true,
-//       message: 'User created successfully and OTP sent.',
-//       user: fetchedUser.toObject(),
-//       token: token.token || null,
-//     };
-//   } catch (error: any) {
-//     await session.abortTransaction();
-//     console.error('Transaction failed:', error);
-
-//     // Clean up local file if upload failed and file was provided
-//     if (file?.path) {
-//       try {
-//         await deleteFile(file.path);
-//       } catch (deleteError) {
-//         console.error('Error deleting file:', deleteError);
-//       }
-//     }
-
-//     throw new Error(
-//       error.message || 'User creation failed due to an internal error.',
-//     );
-//   } finally {
-//     session.endSession();
-//     console.log('Session ended');
-//   }
-// };
-
-
-
-
-
-// Function to create a user
-
-
-
-const createUser = async (
-  payload: Partial<TUser>,
-  file?: any,
-  method?: string,
-) => {
-  console.log("here is the payload", payload);
-
-  // Validate password match
-  if (payload.password !== payload.confirmPassword) {
-    throw new Error('Password and confirm password do not match.');
-  }
-
-  // Validate terms agreement
-  if (!payload.agreedToTerms) {
-    throw new Error('You must agree to the terms and conditions to register.');
-  }
 
   // Check for existing user
   const existingUser = await UserModel.findOne({ email: payload.email }).select(
@@ -199,7 +29,7 @@ const createUser = async (
   };
 
   // Remove confirmPassword from payload
-  const { confirmPassword, ...userData } = userPayload;
+  const { ...userData } = userPayload;
 
   // Check MongoDB connection state
   if (mongoose.connection.readyState !== 1) {
@@ -219,14 +49,6 @@ const createUser = async (
     let imageUrl: string | undefined;
 
     // Optional: Upload image to Cloudinary if file is provided
-    if (file?.path) {
-      const imageName = `${userData.email}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      imageUrl = uploadResult.secure_url;
-      console.log('Image uploaded to Cloudinary:', imageUrl);
-    } else {
-      console.log('No image file provided, skipping upload');
-    }
 
     // Add image URL to userData if available
     const userDataWithImg = {
@@ -234,18 +56,9 @@ const createUser = async (
       ...(imageUrl && { img: imageUrl }),
     };
 
-    let user;
 
-    // Create user
-    if (method) {
-      console.log('Creating user with create method');
-      const created = await UserModel.create([userDataWithImg], { session });
-      user = created[0];
-    } else {
-      console.log('Creating user with new/save method');
-      user = new UserModel({ ...userDataWithImg });
-      await user.save({ session });
-    }
+    const created = await UserModel.create([userDataWithImg], { session });
+    const user = created[0];
 
     console.log('User created:', user._id);
 
@@ -271,7 +84,9 @@ const createUser = async (
           phone: userData.phone,
           email: userData.email!,
           user_id: user._id,
-          img: imageUrl || 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
+          img:
+            imageUrl ||
+            'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
           groupList: groupIds, // Add group IDs to profile
           aiChatCount: 100,
           maxGroups: 3,
@@ -288,7 +103,11 @@ const createUser = async (
 
     // Update group members and transactions with the new user ID
     console.log('Updating group members and transactions');
-    const updateResult = await updateGroupAndTransactions(userData.email!, user._id, session);
+    const updateResult = await updateGroupAndTransactions(
+      userData.email!,
+      user._id,
+      session,
+    );
     console.log('Group and transaction update result:', updateResult);
 
     // Commit the transaction
@@ -309,7 +128,8 @@ const createUser = async (
 
     return {
       success: true,
-      message: 'User created successfully, profile updated with groups, group/transactions updated, and OTP sent.',
+      message:
+        'User created successfully, profile updated with groups, group/transactions updated, and OTP sent.',
       user: fetchedUser.toObject(),
       token: token.token || null,
       groupUpdate: {
@@ -322,25 +142,17 @@ const createUser = async (
     await session.abortTransaction();
     console.error('Transaction failed:', error);
 
-    // Clean up local file if upload failed and file was provided
-    if (file?.path) {
-      try {
-        await deleteFile(file.path);
-      } catch (deleteError) {
-        console.error('Error deleting file:', deleteError);
-      }
-    }
+  
 
     throw new Error(
-      error.message || 'User creation, profile update, or group/transaction update failed due to an internal error.',
+      error.message ||
+        'User creation, profile update, or group/transaction update failed due to an internal error.',
     );
   } finally {
     session.endSession();
     console.log('Session ended');
   }
 };
-
-
 
 const setFCMToken = async (user_id: Types.ObjectId, fcmToken: string) => {
   if (!fcmToken) {
@@ -585,7 +397,6 @@ const unblockUser = async (userId: string) => {
   return user;
 };
 
-
 const userServices = {
   createUser,
   getAllUsers,
@@ -600,7 +411,7 @@ const userServices = {
   getUserFullDetails,
   setFCMToken,
   blockUser,
-  unblockUser
+  unblockUser,
 };
 
 export default userServices;

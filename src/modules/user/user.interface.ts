@@ -7,15 +7,15 @@ export type TUserRole = 'admin' | 'user';
 export type TInterviewsAvailable = number | 'unlimited';
 
 export type TUser = {
-  img:string,
+  img?:string,
   name: string;
   phone?: string;
   email: string;
   password: string;
-  confirmPassword?: string;
-  agreedToTerms: boolean; // Fixed typo: agreedToTerms -> agreedToTerms
+  // confirmPassword?: string;
+  agreedToTerms?: boolean ; // Fixed typo: agreedToTerms -> agreedToTerms
   role: TUserRole;
-  allowPasswordChange: boolean;
+  allowPasswordChange?: boolean;
   sentOTP?: string; // Made optional
   OTPVerified?: boolean; // Made optional
   isDeleted?: boolean; // Changed to boolean

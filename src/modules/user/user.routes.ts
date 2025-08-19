@@ -9,7 +9,6 @@ const userRoutes = express.Router();
 // users routes
 userRoutes.post(
   '/createUser',
-  upload.single('file'),
   userController.createUser,
 );
 

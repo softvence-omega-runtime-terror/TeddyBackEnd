@@ -10,10 +10,9 @@ const UserSchema = new Schema<TUser>(
     phone: { type: String, required: false },
     email: { type: String, required: true },
     password: { type: String, required: true },
-    confirmPassword: { type: String, required: false },
-    agreedToTerms: { type: Boolean, required: true },
+    agreedToTerms: { type: Boolean, default:true },
     role: { type: String, enum: ['admin', 'user'], default: userRole.user },
-    allowPasswordChange: { type: Boolean, required: true, default: false },
+    allowPasswordChange: { type: Boolean, default: true },
     sentOTP: { type: String, required: false }, // Made optional
     OTPVerified: { type: Boolean, required: false, default: false }, // Made optional
     isDeleted: { type: Boolean, required: false, default: false },

@@ -5,24 +5,7 @@ import idConverter from '../../util/idConverter';
 import userServices from './user.service';
 
 const createUser = catchAsync(async (req, res): Promise<void> => {
-  const file = req.file; // Assuming file is from middleware like multer
-  // if (!file) {
-  //   throw new Error('Image file is required');
-  // }
-
-  const data = req.body.data;
-  if (!data) {
-    throw new Error('Data must be provided');
-  }
-
-  let parsedData: any;
-  try {
-    parsedData = JSON.parse(data); // Parse JSON string from req.body.data
-  } catch (error: any) {
-    throw new Error('Invalid JSON data provided');
-  }
-
-  const result = await userServices.createUser(parsedData, file);
+  const result = await userServices.createUser(req.body);
 
   res.status(200).json({
     status: 'success',
