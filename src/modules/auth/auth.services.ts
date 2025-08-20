@@ -25,7 +25,6 @@ const logIn = async (
         email,
         agreedToTerms: true,
       },
-      method,
     );
 
     // Re-fetch new user
