@@ -15,6 +15,7 @@ const UserSchema = new Schema<TUser>(
     allowPasswordChange: { type: Boolean, default: true },
     sentOTP: { type: String, required: false }, // Made optional
     OTPVerified: { type: Boolean, required: false, default: false }, // Made optional
+    isProfileUpdated: { type: Boolean, required: false, default: false },
     isDeleted: { type: Boolean, required: false, default: false },
     isBlocked: { type: Boolean, required: false, default: false },
     isLoggedIn: { type: Boolean, required: false, default: false },

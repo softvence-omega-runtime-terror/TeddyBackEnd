@@ -230,6 +230,14 @@ const updateProfileData = async (
       { $set: payload },
       { new: true },
     );
+
+    // if profile was updated successfully, also update User schema
+    if (updatedProfile) {
+      await UserModel.findByIdAndUpdate(user_id, {
+        $set: { isProfileUpdated: true },
+      });
+    }
+    
     return updatedProfile;
   } catch (error) {
     throw error;
