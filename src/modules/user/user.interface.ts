@@ -18,6 +18,7 @@ export type TUser = {
   allowPasswordChange?: boolean;
   sentOTP?: string; // Made optional
   OTPVerified?: boolean; // Made optional
+  isProfileUpdated?: boolean;
   isDeleted?: boolean; // Changed to boolean
   isBlocked?: boolean;
   isLoggedIn?: boolean;
