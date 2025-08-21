@@ -38,8 +38,10 @@ const sendOTPViaEmail = async (payload: Partial<TUser>) => {
     throw new Error('!payload.email || !payload.role wnt missing');
   }
 
-  const otp = crypto.randomInt(100000, 1000000); // 6-digit
-  console.log(otp);
+  // const otp = crypto.randomInt(100000, 1000000); // 6-digit
+  const otp = String(crypto.randomInt(0, 100000)).padStart(5, "0");
+
+  console.log({otp});
 
   const tokenizeData = createToken(
     {
