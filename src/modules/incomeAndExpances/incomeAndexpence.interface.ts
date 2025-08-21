@@ -44,7 +44,6 @@ export type TPersonalIncomeTypes = {
 
 export type GroupsEachTransactionSummary={
 amount: number;
-  shareWith: "all" | "custom" | "none"; // Indicates how the expense is shared
   perticipated_members: [string]; // List of member IDs who participated in the expense
   slice_type: 'equal' | 'custom' | null;
   members_Share_list: {
