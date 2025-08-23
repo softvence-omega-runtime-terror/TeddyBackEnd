@@ -1,0 +1,63 @@
+
+    // payback amount === minus contibuted amount
+
+
+
+
+    const sharedEmails = transaction.members_Share_list.map(
+      (m) => m.member_email
+    );
+
+    // Merge old paybacks + new inputPaybacks
+    const mergedMap = new Map<string, number>();
+    const allPaybacks = [...(transaction.paybacks || []), ...inputPaybacks];
+
+    allPaybacks.forEach((p) => {
+      const key = `${p.from}->${p.to}`;
+      const amount = Number(p.amount) || 0;
+      if (mergedMap.has(key)) mergedMap.set(key, mergedMap.get(key)! + amount);
+      else mergedMap.set(key, amount);
+    });
+
+    const mergedPaybacks: Payback[] = [];
+    mergedMap.forEach((amount, key) => {
+      const [from, to] = key.split("->");
+      mergedPaybacks.push({ from, to, amount });
+    });
+
+    // Update contribution_list
+    const updatedContributions = transaction.contribution_list.map((c) => {
+      if (!sharedEmails.includes(c.member_email)) {
+        return { ...c, contributed_amount: 0 };
+      }
+
+      // calculate total given/received
+      const totalGiven = mergedPaybacks
+        .filter((p) => p.from === c.member_email)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const totalReceived = mergedPaybacks
+        .filter((p) => p.to === c.member_email)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      let newAmount = c.contributed_amount; // take previous contribution
+      if (c.contributed_amount < 0) {
+        newAmount += totalGiven - totalReceived;
+      } else if (c.contributed_amount > 0) {
+        newAmount += totalReceived - totalGiven;
+      }
+
+      const share = transaction.members_Share_list.find(
+        (m) => m.member_email === c.member_email
+      );
+      if (newAmount === 0 && share) newAmount = share.share_amount;
+
+      return { ...c, contributed_amount: newAmount };
+    });
+
+    // Save back
+    transaction.paybacks = mergedPaybacks;
+    transaction.contribution_list = updatedContributions;
+
+    const savedTransaction = await transaction.save();
+    return savedTransaction;

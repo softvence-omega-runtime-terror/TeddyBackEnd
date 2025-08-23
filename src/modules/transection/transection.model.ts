@@ -19,10 +19,15 @@ const GroupsEachTransactionSummarySchema = new Schema<TGroupsEachTransactionSumm
         contributed_amount: { type: Number, required: true },
       },
     ],
+    paybacks: [
+      {
+        from: { type: String, required: true },
+        to: { type: String, required: true },
+        amount: { type: Number, required: true },
+      },
+    ],
   },
   { timestamps: true }
 );
-
-
 
 export const GroupTransection = mongoose.model('GroupTransection', GroupsEachTransactionSummarySchema);
