@@ -513,7 +513,7 @@ export const paybackTransectionAmountToDB = async (payload: {
       contribution_list: responseContributionList,
     };
   } catch (err: any) {
-    console.error('❌ Error processing paybacks:', err.message);
+    // console.error('❌ Error processing paybacks:', err.message);
     throw err;
   }
 };
