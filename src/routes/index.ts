@@ -5,6 +5,7 @@ import messageRouter from '../modules/message/message.routes';
 import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpence.route';
 import reportRoutes from '../modules/report/report.route';
 import historyRoutes from '../modules/history/history.route';
+import { transectionRoutes } from '../modules/transection/transection.route';
 
 
 const Routes = express.Router();
@@ -33,6 +34,11 @@ const moduleRouts = [
   {
     path: '/history',
     router: historyRoutes,
+  }
+  ,
+  {
+    path: '/transection',
+    router: transectionRoutes,
   }
 ];
 

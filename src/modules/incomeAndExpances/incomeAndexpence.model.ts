@@ -106,11 +106,7 @@ const groupsEachTransactionSummarySchema = new Schema<GroupsEachTransactionSumma
       type: Number,
       required: true,
     },
-    shareWith: {
-      type: String,
-      enum: ['all', 'custom', 'none'],
-      required: true,
-    },
+   
     perticipated_members: {
       type: [String],
       required: true,
