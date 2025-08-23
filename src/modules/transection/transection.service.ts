@@ -270,6 +270,104 @@ interface Payback {
 
 
 
+// export const paybackTransectionAmountToDB = async (payload: {
+//   transectionId: string;
+//   paybacks: Payback[];
+// }) => {
+//   try {
+//     const { transectionId, paybacks } = payload;
+
+//     if (!transectionId) throw new Error('transectionId is required');
+
+//     const transaction = await GroupTransection.findById(transectionId);
+//     if (!transaction) throw new Error('Transaction not found');
+
+//     let contributionList = [...(transaction.contribution_list || [])];
+//     let memberShareList = [...(transaction.members_Share_list || [])];
+
+//     // Fast lookup maps
+//     const contributionMap = new Map<string, number>();
+//     const memberShareMap = new Map<string, number>();
+//     const originalContributionMap = new Map<string, number>();
+
+//     contributionList.forEach((item) => {
+//       contributionMap.set(item.member_email, item.contributed_amount);
+//       originalContributionMap.set(item.member_email, item.contributed_amount);
+//     });
+
+//     memberShareList.forEach((item) => {
+//       memberShareMap.set(item.member_email, item.share_amount);
+//     });
+
+//     // Apply paybacks
+//     for (const payback of paybacks) {
+//       let fromAmount = contributionMap.get(payback.from) || 0;
+//       const toAmount = contributionMap.get(payback.to) || 0;
+
+//       const originalFromAmount = originalContributionMap.get(payback.from) || 0;
+//       if (originalFromAmount === 0) {
+//         fromAmount = memberShareMap.get(payback.from) || 0;
+//       }
+
+//       contributionMap.set(payback.from, fromAmount + payback.amount);
+
+//       const newToAmount = toAmount - payback.amount;
+//       if (newToAmount < 0) {
+//         throw new Error(`Invalid payback: ${payback.to} cannot have negative contribution`);
+//       }
+
+//       contributionMap.set(payback.to, newToAmount);
+//     }
+
+//     // Rebuild the contribution list
+//     contributionList = contributionList.map((item) => ({
+//       member_email: item.member_email,
+//       contributed_amount: contributionMap.get(item.member_email) || 0,
+//     }));
+
+//     // Update DB
+//     const updatedTransaction = await GroupTransection.findByIdAndUpdate(
+//       transectionId,
+//       {
+//         $set: {
+//           contribution_list: contributionList,
+//           // Uncomment below if you want to store paybacks too
+//           // paybacks: paybacks,
+//         },
+//       },
+//       { new: true }
+//     );
+
+//     // ✅ Type-safe null check
+//     if (!updatedTransaction) {
+//       throw new Error('Transaction update failed or not found');
+//     }
+
+//     // Customize response: show share_amount if contribution is 0
+//     const responseContributionList = updatedTransaction.contribution_list.map((item) => {
+//       const isZero = item.contributed_amount === 0;
+//       const shareAmount = memberShareMap.get(item.member_email) || 0;
+
+//       return {
+//         member_email: item.member_email,
+//         contributed_amount: isZero ? shareAmount : item.contributed_amount,
+//       };
+//     });
+
+//     // Return final response object
+//     return {
+//       ...updatedTransaction.toObject(),
+//       contribution_list: responseContributionList,
+//     };
+//   } catch (err: any) {
+//     console.error('❌ Error processing paybacks:', err.message);
+//     throw err;
+//   }
+// };
+
+
+
+
 export const paybackTransectionAmountToDB = async (payload: {
   transectionId: string;
   paybacks: Payback[];
@@ -284,11 +382,13 @@ export const paybackTransectionAmountToDB = async (payload: {
 
     let contributionList = [...(transaction.contribution_list || [])];
     let memberShareList = [...(transaction.members_Share_list || [])];
+    let paybackList = [...(transaction.paybacks || [])]; // Initialize payback list from DB
 
     // Fast lookup maps
     const contributionMap = new Map<string, number>();
     const memberShareMap = new Map<string, number>();
     const originalContributionMap = new Map<string, number>();
+    const totalPaybackMap = new Map<string, number>(); // Track total payback amount per 'from' member
 
     contributionList.forEach((item) => {
       contributionMap.set(item.member_email, item.contributed_amount);
@@ -299,8 +399,35 @@ export const paybackTransectionAmountToDB = async (payload: {
       memberShareMap.set(item.member_email, item.share_amount);
     });
 
-    // Apply paybacks
+    // Calculate total payback amounts per 'from' member
+    paybackList.forEach((payback) => {
+      const currentTotal = totalPaybackMap.get(payback.from) || 0;
+      totalPaybackMap.set(payback.from, currentTotal + payback.amount);
+    });
+
+    // Map to track existing paybacks by from-to pair
+    const paybackMap = new Map<string, { from: string; to: string; amount: number; _id?: string }>();
+    paybackList.forEach((payback) => {
+      const key = `${payback.from}-${payback.to}`;
+      paybackMap.set(key, {
+        from: payback.from,
+        to: payback.to,
+        amount: payback.amount,
+      });
+    });
+
+    // Apply paybacks and update payback information
     for (const payback of paybacks) {
+      const fromShareAmount = memberShareMap.get(payback.from) || 0;
+      const currentTotalPayback = totalPaybackMap.get(payback.from) || 0;
+
+      // Check if the member has already paid back their full share_amount
+      if (currentTotalPayback + payback.amount > fromShareAmount) {
+        throw new Error(
+          `Invalid payback: ${payback.from} cannot payback more than their share amount (${fromShareAmount})`
+        );
+      }
+
       let fromAmount = contributionMap.get(payback.from) || 0;
       const toAmount = contributionMap.get(payback.to) || 0;
 
@@ -317,6 +444,25 @@ export const paybackTransectionAmountToDB = async (payload: {
       }
 
       contributionMap.set(payback.to, newToAmount);
+
+      // Update or add payback to paybackMap
+      const key = `${payback.from}-${payback.to}`;
+      if (paybackMap.has(key)) {
+        // If payback exists for this from-to pair, add the amount
+        const existingPayback = paybackMap.get(key)!;
+        existingPayback.amount += payback.amount;
+        paybackMap.set(key, existingPayback);
+      } else {
+        // If no payback exists, create a new entry
+        paybackMap.set(key, {
+          from: payback.from,
+          to: payback.to,
+          amount: payback.amount,
+        });
+      }
+
+      // Update total payback amount for this 'from' member
+      totalPaybackMap.set(payback.from, currentTotalPayback + payback.amount);
     }
 
     // Rebuild the contribution list
@@ -325,14 +471,21 @@ export const paybackTransectionAmountToDB = async (payload: {
       contributed_amount: contributionMap.get(item.member_email) || 0,
     }));
 
-    // Update DB
+    // Rebuild paybackList from paybackMap
+    paybackList = Array.from(paybackMap.values()).map(({ from, to, amount, _id }) => ({
+      from,
+      to,
+      amount,
+      ...(_id && { _id }), // Include _id only if it exists
+    }));
+
+    // Update DB with contribution_list and paybacks
     const updatedTransaction = await GroupTransection.findByIdAndUpdate(
       transectionId,
       {
         $set: {
           contribution_list: contributionList,
-          // Uncomment below if you want to store paybacks too
-          // paybacks: paybacks,
+          paybacks: paybackList, // Store updated paybacks in DB
         },
       },
       { new: true }
