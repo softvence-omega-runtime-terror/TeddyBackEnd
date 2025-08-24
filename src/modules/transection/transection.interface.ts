@@ -1,5 +1,9 @@
+import { Types } from "mongoose";
+
 export type TGroupsEachTransactionSummary = {
   amount: number;
+
+  createdBy:Types.ObjectId
 
   // যারা transaction এ অংশগ্রহণ করেছে
   perticipated_members: string[];
