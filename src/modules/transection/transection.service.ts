@@ -1,8 +1,7 @@
-
 import { Types } from 'mongoose';
 import { GroupTransection } from './transection.model';
-
-
+import ApppError from '../../error/AppError';
+import status from 'http-status';
 
 interface CreateTransactionPayload {
   amount: number;
@@ -11,7 +10,6 @@ interface CreateTransactionPayload {
   contribution_type: 'allClear' | 'custom';
   contribution_list?: { member_email: string; contributed_amount: number }[];
 }
-
 
 interface CreateTransactionPayload {
   amount: number;
@@ -128,7 +126,6 @@ interface Payback {
   to: string;
   amount: number;
 }
-
 
 export const paybackTransectionAmountToDB = async (payload: {
   transectionId: string;
@@ -289,23 +286,274 @@ export const paybackTransectionAmountToDB = async (payload: {
   }
 };
 
-const addMemberToTransection = async () => {
-  console.log('Add member...');
+const addMemberToEqualTransection = async (data: {
+  transectionId: string;
+  members_Share_list: { member_email: string }[];
+}) => {
+  console.log('Add member...', data);
+
+  // 1️⃣ Validate input and fetch transaction
+  const { transectionId, members_Share_list } = data;
+
+  if (!transectionId || !members_Share_list || !members_Share_list.length) {
+    throw new ApppError(status.BAD_REQUEST, 'Transaction ID and member email list are required');
+  }
+
+  const transaction = await GroupTransection.findById(transectionId);
+  if (!transaction) {
+    throw new ApppError(status.NOT_FOUND, 'Transaction not found');
+  }
+
+  // 2️⃣ Validate transaction type
+  if (
+    transaction.slice_type !== 'equal' ||
+    transaction.contribution_type !== 'allClear'
+  ) {
+    throw new ApppError(
+      status.CONFLICT,
+      'New members can only be added to transactions with equal slice type and allClear contribution type'
+    );
+  }
+
+  // 3️⃣ Check for duplicate members
+  const newMemberEmails = members_Share_list.map((m) => m.member_email);
+  const existingMemberEmails = transaction.perticipated_members || [];
+  const duplicates = newMemberEmails.filter((email) =>
+    existingMemberEmails.includes(email)
+  );
+
+  if (duplicates.length > 0) {
+    throw new ApppError(
+      status.CONFLICT,
+      `Members already exist in the transaction: ${duplicates.join(', ')}`
+    );
+  }
+
+  // 4️⃣ Calculate new equal share
+  const totalMembers = existingMemberEmails.length + newMemberEmails.length;
+  const newEqualShare = parseFloat((transaction.amount / totalMembers).toFixed(2));
+
+  // 5️⃣ Update members_Share_list with new equal shares
+  const updatedMembersShareList = [
+    ...transaction.members_Share_list.map((member) => ({
+      member_email: member.member_email,
+      share_amount: newEqualShare,
+    })),
+    ...newMemberEmails.map((email) => ({
+      member_email: email,
+      share_amount: newEqualShare,
+    })),
+  ];
+
+  
+  // 7️⃣ Update perticipated_members
+  const updatedParticipatedMembers = [
+    ...new Set([...existingMemberEmails, ...newMemberEmails]),
+  ];
+
+  // 8️⃣ Save updated transaction to the database
+  const updatedTransaction = await GroupTransection.findByIdAndUpdate(
+    transectionId,
+    {
+      $set: {
+        members_Share_list: updatedMembersShareList,
+        perticipated_members: updatedParticipatedMembers,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedTransaction) {
+    throw new ApppError(status.INTERNAL_SERVER_ERROR, 'Failed to update transaction');
+  }
+
+  return updatedTransaction;
+};
+const addMemberToCustomTransection = async (data: {
+  transectionId: string;
+  members_Share_list: { member_email: string; share_amount: number }[];
+}) => {
+  console.log('Add member to custom transaction...', data);
+
+  // 1️⃣ Validate input
+  const { transectionId, members_Share_list } = data;
+
+  if (!transectionId || !members_Share_list || !members_Share_list.length) {
+    throw new ApppError(status.BAD_REQUEST, 'Transaction ID and member email list with share amounts are required');
+  }
+
+  // Validate that share_amount is provided and valid for each new member
+  if (members_Share_list.some((m) => m.share_amount == null || m.share_amount < 0)) {
+    throw new ApppError(status.BAD_REQUEST, 'Each new member must have a valid non-negative share amount');
+  }
+
+  // 2️⃣ Fetch transaction
+  const transaction = await GroupTransection.findById(transectionId);
+  if (!transaction) {
+    throw new ApppError(status.NOT_FOUND, 'Transaction not found');
+  }
+
+  // 3️⃣ Validate transaction type
+  if (transaction.slice_type !== 'custom' || transaction.contribution_type !== 'allClear') {
+    throw new ApppError(
+      status.CONFLICT,
+      'New members can only be added to transactions with custom slice type and allClear contribution type'
+    );
+  }
+
+  // 4️⃣ Check for duplicate members
+  const newMemberEmails = members_Share_list.map((m) => m.member_email);
+  const existingMemberEmails = transaction.perticipated_members || [];
+  const duplicates = newMemberEmails.filter((email) => existingMemberEmails.includes(email));
+
+  if (duplicates.length > 0) {
+    throw new ApppError(
+      status.CONFLICT,
+      `Members already exist in the transaction: ${duplicates.join(', ')}`
+    );
+  }
+
+  // 5️⃣ Calculate new total amount
+  const currentTotalShare = transaction.members_Share_list.reduce(
+    (sum, member) => sum + member.share_amount,
+    0
+  );
+  const newMemberTotalShare = members_Share_list.reduce(
+    (sum, member) => sum + member.share_amount,
+    0
+  );
+  const updatedTotalAmount = currentTotalShare + newMemberTotalShare;
+
+  // 6️⃣ Update members_Share_list
+  const updatedMembersShareList = [
+    ...transaction.members_Share_list,
+    ...members_Share_list.map((m) => ({
+      member_email: m.member_email,
+      share_amount: m.share_amount,
+    })),
+  ];
+
+
+  // 8️⃣ Update perticipated_members
+  const updatedParticipatedMembers = [
+    ...new Set([...existingMemberEmails, ...newMemberEmails]),
+  ];
+
+  // 9️⃣ Save updated transaction to the database
+  const updatedTransaction = await GroupTransection.findByIdAndUpdate(
+    transectionId,
+    {
+      $set: {
+        amount: updatedTotalAmount,
+        members_Share_list: updatedMembersShareList,
+        perticipated_members: updatedParticipatedMembers,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedTransaction) {
+    throw new ApppError(status.INTERNAL_SERVER_ERROR, 'Failed to update transaction');
+  }
+
+  return updatedTransaction;
 };
 
+const deleteMemberFromEqualTransection = async (data: {
+  transectionId: string;
+  member_email: string;
+}) => {
+  console.log('Delete member from equal transaction...', data);
+
+  // 1️⃣ Validate input
+  const { transectionId, member_email } = data;
+
+  if (!transectionId || !member_email) {
+    throw new ApppError(status.BAD_REQUEST, 'Transaction ID and member email are required');
+  }
+
+  // 2️⃣ Fetch transaction
+  const transaction = await GroupTransection.findById(transectionId);
+  if (!transaction) {
+    throw new ApppError(status.NOT_FOUND, 'Transaction not found');
+  }
+
+  // 3️⃣ Validate transaction type
+  if (
+    transaction.slice_type !== 'equal' ||
+    transaction.contribution_type !== 'allClear'
+  ) {
+    throw new ApppError(
+      status.CONFLICT,
+      'Members can only be deleted from transactions with equal slice type and allClear contribution type'
+    );
+  }
+
+  // 4️⃣ Check if member exists and can be deleted
+  const existingMemberEmails = transaction.perticipated_members || [];
+  if (!existingMemberEmails.includes(member_email)) {
+    throw new ApppError(status.NOT_FOUND, `Member ${member_email} not found in the transaction`);
+  }
+
+  if (existingMemberEmails.length <= 1) {
+    throw new ApppError(
+      status.BAD_REQUEST,
+      'Cannot delete the last member from the transaction'
+    );
+  }
+
+  // 5️⃣ Calculate the removed member's share and new total amount
+  const totalMembers = existingMemberEmails.length;
+  const removedMemberShare = parseFloat((transaction.amount / totalMembers).toFixed(2));
+  const updatedTotalAmount = parseFloat((transaction.amount - removedMemberShare).toFixed(2));
+
+  // 6️⃣ Update perticipated_members
+  const updatedParticipatedMembers = existingMemberEmails.filter(
+    (email) => email !== member_email
+  );
+
+  // 7️⃣ Calculate new equal share for remaining members
+  const newEqualShare = parseFloat((updatedTotalAmount / updatedParticipatedMembers.length).toFixed(2));
+
+  // 8️⃣ Update members_Share_list
+  const updatedMembersShareList = transaction.members_Share_list
+    .filter((member) => member.member_email !== member_email)
+    .map((member) => ({
+      member_email: member.member_email,
+      share_amount: newEqualShare,
+    }));
 
 
-const getAllTransection = async(createdBy:string)=>{
+  // 10️⃣ Save updated transaction to the database
+  const updatedTransaction = await GroupTransection.findByIdAndUpdate(
+    transectionId,
+    {
+      $set: {
+        amount: updatedTotalAmount,
+        members_Share_list: updatedMembersShareList,
+        perticipated_members: updatedParticipatedMembers,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedTransaction) {
+    throw new ApppError(status.INTERNAL_SERVER_ERROR, 'Failed to update transaction');
+  }
+
+  return updatedTransaction;
+};
+
+const getAllTransection = async (createdBy: string) => {
   // console.log({createdBy})
 
-  const result = await GroupTransection.find({createdBy})
-  return result
-}
-
-
-export const TransectionService = {
-  addMemberToTransection,
-  getAllTransection
+  const result = await GroupTransection.find({ createdBy });
+  return result;
 };
 
-
+export const TransectionService = {
+  addMemberToEqualTransection,
+  getAllTransection,
+  addMemberToCustomTransection,
+  deleteMemberFromEqualTransection
+};
