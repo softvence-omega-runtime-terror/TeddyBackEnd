@@ -3,71 +3,121 @@ import { GroupTransection } from './transection.model';
 import ApppError from '../../error/AppError';
 import status from 'http-status';
 
-interface CreateTransactionPayload {
-  amount: number;
-  slice_type: 'equal' | 'custom' | null;
-  members_Share_list: { member_email: string; share_amount: number }[];
-  contribution_type: 'allClear' | 'custom';
-  contribution_list?: { member_email: string; contributed_amount: number }[];
-}
 
-interface CreateTransactionPayload {
+interface GroupTransection {
   amount: number;
-  createdBy: Types.ObjectId;
-
-  slice_type: 'equal' | 'custom' | null;
-  members_Share_list: { member_email: string; share_amount: number }[];
+  createdBy: string;
+  perticipated_members: string[];
+  slice_type: 'equal' | 'custom';
+  members_Share_list: { member_email: string; share_amount?: number }[];
   contribution_type: 'allClear' | 'custom';
-  contribution_list?: { member_email: string; contributed_amount: number }[];
+  contribution_list: { member_email: string; contributed_amount: number }[];
 }
 
 export const createTransactionSummary = async (
-  payload: CreateTransactionPayload,
+  payload: GroupTransection,
 ) => {
   const {
     amount,
     createdBy,
-
     slice_type,
     members_Share_list,
     contribution_type,
-    contribution_list,
+    contribution_list = [],
   } = payload;
 
   console.log({ payload });
 
-  let finalMembersShareList: { member_email: string; share_amount: number }[] =
-    [];
-  let finalContributionList: {
-    member_email: string;
-    contributed_amount: number;
-  }[] = [];
+  // ===========================
+  // 1️⃣ Input Validation
+  // ===========================
+  if (!amount || amount <= 0) {
+    throw new ApppError(status.BAD_REQUEST, 'Amount must be a positive number');
+  }
+  if (!createdBy) {
+    throw new ApppError(status.BAD_REQUEST, 'CreatedBy is required');
+  }
+  if (!['equal', 'custom'].includes(slice_type as string)) {
+    throw new ApppError(status.BAD_REQUEST, 'Slice type must be "equal" or "custom"');
+  }
+  if (!['allClear', 'custom'].includes(contribution_type)) {
+    throw new ApppError(status.BAD_REQUEST, 'Contribution type must be "allClear" or "custom"');
+  }
+  if (!members_Share_list || !members_Share_list.length) {
+    throw new ApppError(status.BAD_REQUEST, 'Members share list is required and cannot be empty');
+  }
+
+  // Validate member emails
+  const memberEmails = members_Share_list.map((m) => m.member_email);
+  if (memberEmails.some((email) => !email || typeof email !== 'string')) {
+    throw new ApppError(status.BAD_REQUEST, 'All member emails must be valid strings');
+  }
+
+  let finalMembersShareList: { member_email: string; share_amount: number }[] = [];
+  let finalContributionList: { member_email: string; contributed_amount: number }[] = [];
 
   // ===========================
-  // 1️⃣ Slice Type Logic
+  // 2️⃣ Slice Type Logic
   // ===========================
   if (slice_type === 'equal') {
-    const members = members_Share_list.map((m) => m.member_email);
-    const equalShare = parseFloat((amount / members.length).toFixed(2));
-
-    finalMembersShareList = members.map((email) => ({
-      member_email: email,
+    const equalShare = parseFloat((amount / members_Share_list.length).toFixed(2));
+    finalMembersShareList = members_Share_list.map((member) => ({
+      member_email: member.member_email,
       share_amount: equalShare,
     }));
+
+    // Ensure total shares match amount (adjust last member if needed due to rounding)
+    const totalShare = finalMembersShareList.reduce((sum, m) => sum + m.share_amount, 0);
+    if (totalShare !== amount) {
+      finalMembersShareList[finalMembersShareList.length - 1].share_amount +=
+        amount - totalShare;
+    }
   } else if (slice_type === 'custom') {
-    finalMembersShareList = members_Share_list;
+    // Validate share_amount for custom slice type
+    if (members_Share_list.some((m) => m.share_amount == null || m.share_amount < 0)) {
+      throw new ApppError(status.BAD_REQUEST, 'Each member must have a valid non-negative share amount for custom slice type');
+    }
+
+    finalMembersShareList = members_Share_list.map((m) => ({
+      member_email: m.member_email,
+      share_amount: m.share_amount!,
+    }));
+
+    // Validate total share_amount equals amount
+    const totalShare = finalMembersShareList.reduce((sum, m) => sum + m.share_amount, 0);
+    if (totalShare !== amount) {
+      throw new ApppError(status.BAD_REQUEST, 'Total share amounts must equal the transaction amount');
+    }
   }
 
   // ===========================
-  // 2️⃣ Contribution Logic
+  // 3️⃣ Contribution Logic
   // ===========================
-  if (contribution_type === 'custom') {
-    if (!contribution_list) {
+  if (contribution_type === 'allClear') {
+    finalContributionList = [];
+  } else if (contribution_type === 'custom') {
+    if (!contribution_list.length) {
+      // If no contribution_list provided, assume members owe their share
       finalContributionList = finalMembersShareList.map((member) => ({
         member_email: member.member_email,
         contributed_amount: -member.share_amount,
       }));
     } else {
+      // Validate contribution_list
+      if (contribution_list.some((c) => c.contributed_amount < 0 || !c.member_email)) {
+        throw new ApppError(status.BAD_REQUEST, 'Contribution list must have valid non-negative amounts and emails');
+      }
+
+      // Calculate total contributed amount
+      const totalContributed = contribution_list.reduce(
+        (sum, c) => sum + c.contributed_amount,
+        0,
+      );
+      if (totalContributed !== amount) {
+        throw new ApppError(status.BAD_REQUEST, 'Total contributed amount must equal the transaction amount');
+      }
+
+      // Build contribution list
       finalContributionList = finalMembersShareList.map((member) => {
         const contributed = contribution_list.find(
           (c) => c.member_email === member.member_email,
@@ -81,11 +131,9 @@ export const createTransactionSummary = async (
         };
       });
 
-      // যদি এমন কেউ থাকে যিনি pay করেছেন কিন্তু share list এ নাই → তাকেও include করতে হবে
+      // Include contributors who are not in members_Share_list
       contribution_list.forEach((c) => {
-        if (
-          !finalMembersShareList.find((m) => m.member_email === c.member_email)
-        ) {
+        if (!finalMembersShareList.find((m) => m.member_email === c.member_email)) {
           finalContributionList.push({
             member_email: c.member_email,
             contributed_amount: c.contributed_amount,
@@ -96,17 +144,17 @@ export const createTransactionSummary = async (
   }
 
   // ===========================
-  // 3️⃣ perticipated_members বানানো
+  // 4️⃣ Participated Members
   // ===========================
   const perticipated_members = [
     ...new Set([
       ...finalMembersShareList.map((m) => m.member_email),
-      ...(finalContributionList?.map((c) => c.member_email) || []),
+      ...finalContributionList.map((c) => c.member_email),
     ]),
   ];
 
   // ===========================
-  // 4️⃣ Save to DB
+  // 5️⃣ Save to DB
   // ===========================
   const transaction = new GroupTransection({
     amount,
@@ -120,6 +168,10 @@ export const createTransactionSummary = async (
 
   return await transaction.save();
 };
+
+
+
+
 
 interface Payback {
   from: string;
