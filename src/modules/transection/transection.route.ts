@@ -5,9 +5,10 @@ import { userRole } from '../../constants';
 
 const router = Router();
 
-router.get('/',auth([userRole.user, userRole.admin]), TransectionController.getAllTransection);
-router.post('/group-transaction',auth([userRole.user, userRole.admin]), TransectionController.createTransection);
+router.get('/get-myself-group-transaction',auth([userRole.user, userRole.admin]), TransectionController.getAllTransection);
+router.post('/create-group-transaction',auth([userRole.user, userRole.admin]), TransectionController.createTransection);
 router.post('/payback-amount', TransectionController.paybackTransectionAmount);
+router.post('/add-member-to-transaction', TransectionController.addMemberToTransaction)
 router.post('/add-member-to-equal-slice-type', TransectionController.addMemberToEqualTransection)
 router.post('/add-member-to-custom-slice-type', TransectionController.addMemberToCustomTransection)
 router.delete('/delete-member-to-equal-slice-type', TransectionController.deleteMemberFromEqualTransection)

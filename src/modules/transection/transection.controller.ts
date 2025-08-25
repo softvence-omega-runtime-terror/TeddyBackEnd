@@ -50,6 +50,15 @@ const addMemberToCustomTransection = catchAsync(async (req, res): Promise<void> 
     data: result,
   });
 });
+const addMemberToTransaction = catchAsync(async (req, res): Promise<void> => {
+  const result = await TransectionService.addMemberToTransaction(req.body);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'member added successfully..',
+    data: result,
+  });
+});
 const deleteMemberFromEqualTransection = catchAsync(async (req, res): Promise<void> => {
   const result = await TransectionService.deleteMemberFromEqualTransection(req.body);
 
@@ -77,5 +86,6 @@ export const TransectionController = {
   addMemberToEqualTransection,
   getAllTransection,
   addMemberToCustomTransection,
-  deleteMemberFromEqualTransection
+  deleteMemberFromEqualTransection,
+  addMemberToTransaction
 };
