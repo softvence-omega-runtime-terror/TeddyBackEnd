@@ -12,4 +12,5 @@ router.post('/add-member-to-transaction', TransectionController.addMemberToTrans
 router.post('/add-member-to-equal-slice-type', TransectionController.addMemberToEqualTransection)
 router.post('/add-member-to-custom-slice-type', TransectionController.addMemberToCustomTransection)
 router.delete('/delete-member-to-equal-slice-type', TransectionController.deleteMemberFromEqualTransection)
+router.delete('/leave-a-member-from-group', TransectionController.leaveAMemberFromGroup)
 export const transectionRoutes = router;
