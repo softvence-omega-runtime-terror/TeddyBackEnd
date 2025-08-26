@@ -44,6 +44,7 @@ const updateSubscriptionStatus = catchAsync(async (req: Request, res: Response) 
     }
 });
 
+// Get Subscription by User ID
 const getUserById = catchAsync(async (req, res) => {
     const { userId } = req.params;
 
@@ -57,6 +58,7 @@ const getUserById = catchAsync(async (req, res) => {
     });
 });
 
+// Get Total Subscribers Count
 const getTotalSubscribers = catchAsync(async (req, res) => {
     const result = await userSubscriptionService.getTotalSubscribers();
     res.status(200).json({
@@ -68,6 +70,7 @@ const getTotalSubscribers = catchAsync(async (req, res) => {
     });
 });
 
+// Get Active Subscribers Count
 const getActiveSubscribers = catchAsync(async (req, res) => {
     const result = await userSubscriptionService.getActiveSubscribers();
     res.status(200).json({
