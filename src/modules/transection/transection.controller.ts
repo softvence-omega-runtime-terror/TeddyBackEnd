@@ -66,6 +66,15 @@ const deleteMemberFromEqualTransection = catchAsync(async (req, res): Promise<vo
     data: result,
   });
 });
+const leaveAMemberFromGroup = catchAsync(async (req, res): Promise<void> => {
+  const result = await TransectionService.leaveAMemberFromGroup(req.body);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'member left successfully..',
+    data: result,
+  });
+});
 const getAllTransection = catchAsync(async (req, res): Promise<void> => {
     const userId = req.user?.id; // Optional, as user may not be authenticated for common types
 
@@ -85,5 +94,6 @@ export const TransectionController = {
   getAllTransection,
   addMemberToCustomTransection,
   deleteMemberFromEqualTransection,
-  addMemberToTransaction
+  addMemberToTransaction,
+  leaveAMemberFromGroup
 };

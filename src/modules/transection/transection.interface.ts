@@ -6,6 +6,7 @@ export type TGroupsEachTransactionSummary = {
   currency:string;
   note:string;
   createdBy: Types.ObjectId;
+  groupId:String
 
   perticipated_members: string[];
 
