@@ -5,6 +5,8 @@ const GroupsEachTransactionSummarySchema =
   new Schema<TGroupsEachTransactionSummary>(
     {
       amount: { type: Number, required: true },
+      currency: { type: String, required: true },
+      note: { type: String, required: true },
       createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'UserCollection',

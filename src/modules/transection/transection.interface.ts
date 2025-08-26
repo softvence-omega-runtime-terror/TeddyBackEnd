@@ -3,6 +3,8 @@ import { Types } from 'mongoose';
 export type TGroupsEachTransactionSummary = {
   amount: number;
 
+  currency:string;
+  note:string;
   createdBy: Types.ObjectId;
 
   perticipated_members: string[];

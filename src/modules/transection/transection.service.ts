@@ -2,11 +2,15 @@ import { Types } from 'mongoose';
 import { GroupTransection } from './transection.model';
 import ApppError from '../../error/AppError';
 import status from 'http-status';
+import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
 
 
 interface GroupTransection {
   amount: number;
+  groupId:string;
   createdBy: string;
+  currency:string;
+  note:string;
   perticipated_members: string[];
   slice_type: 'equal' | 'custom';
   members_Share_list: { member_email: string; share_amount?: number }[];
@@ -14,11 +18,14 @@ interface GroupTransection {
   contribution_list: { member_email: string; contributed_amount: number }[];
 }
 
-export const createTransactionSummary = async (
+ const createTransactionSummary = async (
   payload: GroupTransection,
 ) => {
   const {
     amount,
+    groupId,
+    currency,
+    note,
     createdBy,
     slice_type,
     members_Share_list,
@@ -28,9 +35,16 @@ export const createTransactionSummary = async (
 
   console.log({ payload });
 
+  // Check if group exists
+  const isGroupExists = await ExpenseOrIncomeGroupModel.findById(groupId);
+  console.log({ isGroupExists });
+
   // ===========================
   // 1️⃣ Input Validation
   // ===========================
+  if (!isGroupExists) {
+    throw new ApppError(status.NOT_FOUND, 'Group does not exist');
+  }
   if (!amount || amount <= 0) {
     throw new ApppError(status.BAD_REQUEST, 'Amount must be a positive number');
   }
@@ -53,11 +67,45 @@ export const createTransactionSummary = async (
     throw new ApppError(status.BAD_REQUEST, 'All member emails must be valid strings');
   }
 
+ 
+  // ===========================
+  // 2️⃣ Validate Emails in groupMemberList
+  // ===========================
+  const groupMemberEmails = isGroupExists.groupMemberList.map((member: any) => member.email);
+  
+  // Check members_Share_list emails
+  const invalidShareEmails = members_Share_list.filter(
+    (m) => !groupMemberEmails.includes(m.member_email)
+  );
+
+  console.log({invalidShareEmails})
+  if (invalidShareEmails.length > 0) {
+    throw new ApppError(
+      status.BAD_REQUEST,
+      `The following emails are not part of the group: ${invalidShareEmails
+        .map((m) => m.member_email)
+        .join(', ')}`
+    );
+  }
+
+  // Check contribution_list emails
+  const invalidContributionEmails = contribution_list.filter(
+    (c) => !groupMemberEmails.includes(c.member_email)
+  );
+  if (invalidContributionEmails.length > 0) {
+    throw new ApppError(
+      status.BAD_REQUEST,
+      `The following contributor emails are not part of the group: ${invalidContributionEmails
+        .map((c) => c.member_email)
+        .join(', ')}`
+    );
+  }
+
   let finalMembersShareList: { member_email: string; share_amount: number }[] = [];
   let finalContributionList: { member_email: string; contributed_amount: number }[] = [];
 
   // ===========================
-  // 2️⃣ Slice Type Logic
+  // 3️⃣ Slice Type Logic
   // ===========================
   if (slice_type === 'equal') {
     const equalShare = parseFloat((amount / members_Share_list.length).toFixed(2));
@@ -91,7 +139,7 @@ export const createTransactionSummary = async (
   }
 
   // ===========================
-  // 3️⃣ Contribution Logic
+  // 4️⃣ Contribution Logic
   // ===========================
   if (contribution_type === 'allClear') {
     finalContributionList = [];
@@ -144,7 +192,7 @@ export const createTransactionSummary = async (
   }
 
   // ===========================
-  // 4️⃣ Participated Members
+  // 5️⃣ Participated Members
   // ===========================
   const perticipated_members = [
     ...new Set([
@@ -154,11 +202,13 @@ export const createTransactionSummary = async (
   ];
 
   // ===========================
-  // 5️⃣ Save to DB
+  // 6️⃣ Save to DB
   // ===========================
   const transaction = new GroupTransection({
     amount,
     createdBy,
+    currency,
+    note,
     perticipated_members,
     slice_type,
     members_Share_list: finalMembersShareList,
@@ -179,7 +229,7 @@ interface Payback {
   amount: number;
 }
 
-export const paybackTransectionAmountToDB = async (payload: {
+ const paybackTransectionAmountToDB = async (payload: {
   transectionId: string;
   paybacks: Payback[];
 }) => {
@@ -719,6 +769,8 @@ const getAllTransection = async (createdBy: string) => {
 };
 
 export const TransectionService = {
+  createTransactionSummary,
+  paybackTransectionAmountToDB,
   addMemberToEqualTransection,
   getAllTransection,
   addMemberToCustomTransection,

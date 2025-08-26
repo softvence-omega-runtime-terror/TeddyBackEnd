@@ -1,6 +1,4 @@
 import {
-  createTransactionSummary,
-  paybackTransectionAmountToDB,
   TransectionService,
 } from './transection.service';
 import catchAsync from '../../util/catchAsync';
@@ -15,7 +13,7 @@ const createTransection = catchAsync(async (req, res): Promise<void> => {
     ...req.body
   };
   console.log(transectionData)
-  const result = await createTransactionSummary(transectionData);
+  const result = await TransectionService.createTransactionSummary(transectionData);
 
   res.status(200).json({
     status: 'success',
@@ -24,7 +22,7 @@ const createTransection = catchAsync(async (req, res): Promise<void> => {
   });
 });
 const paybackTransectionAmount = catchAsync(async (req, res): Promise<void> => {
-  const result = await paybackTransectionAmountToDB(req.body);
+  const result = await TransectionService.paybackTransectionAmountToDB(req.body);
 
   res.status(200).json({
     status: 'success',
