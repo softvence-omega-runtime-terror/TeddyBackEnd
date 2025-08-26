@@ -55,7 +55,7 @@ export async function createCheckoutSession(params: {
 
     // If it's a subscription plan, set the session as a subscription
     if (plan.subscription) {
-        sessionParams.mode = "subscription"; 
+        sessionParams.mode = "subscription";
         if (plan.freeTrialDays) {
             sessionParams.subscription_data = { trial_period_days: plan.freeTrialDays };
         }
@@ -138,7 +138,7 @@ export async function verifyPayment(session_id: string) {
         const session = await stripe.checkout.sessions.retrieve(session_id);
 
         if (session.payment_status !== 'paid') {
-            return 'Payment not completed'
+            return { success: false, message: 'Payment not completed' }
         }
 
         const userId = session.metadata?.userId;
@@ -149,7 +149,7 @@ export async function verifyPayment(session_id: string) {
             return 'Invalid session metadata';
         }
 
-        return 'Payment verified successfully';
+        return { success: true, message: 'Payment verified successfully' };
     } catch (error) {
         console.error('Payment verification failed:', error);
         throw new Error('Payment verification failed');
@@ -157,96 +157,11 @@ export async function verifyPayment(session_id: string) {
 }
 
 
-// subscription status update logic
-export async function updateSubscriptionStatus(params: {
-    userId: string,
-    subscriptionId?: string,
-    status: string
-}) {
-    const { userId, subscriptionId, status } = params;
-
-    // Find the subscription to update
-    let userSubscription;
-
-    if (subscriptionId) {
-        // If subscription ID is provided, find by subscription ID and user ID
-        userSubscription = await UserSubscriptionModel.findOne({
-            userId,
-            stripeSubscriptionId: subscriptionId
-        });
-    } else {
-        // Find the most recent subscription for the user
-        userSubscription = await UserSubscriptionModel.findOne({
-            userId,
-            type: 'subscription'
-        }).sort({ createdAt: -1 });
-    }
-
-    if (!userSubscription) {
-        throw new Error("Subscription not found");
-    }
-
-    const currentStatus = userSubscription.status;
-
-    // Handle Stripe subscription updates based on status change
-    if (userSubscription.stripeSubscriptionId) {
-        try {
-            if (status === 'active' && currentStatus !== 'active') {
-                // Reactivate subscription in Stripe
-                await stripe.subscriptions.update(userSubscription.stripeSubscriptionId, {
-                    cancel_at_period_end: false
-                });
-            } else if (status === 'inactive' || status === 'cancelled') {
-                if (currentStatus === 'active') {
-                    // Cancel subscription in Stripe
-                    await stripe.subscriptions.update(userSubscription.stripeSubscriptionId, {
-                        cancel_at_period_end: true
-                    });
-                }
-            }
-        } catch (stripeError: any) {
-            console.error("Stripe update error:", stripeError);
-            throw new Error(`Failed to update subscription in Stripe: ${stripeError.message}`);
-        }
-    }
-
-    // Update subscription status in database
-    const previousStatus = userSubscription.status;
-    userSubscription.status = status as typeof userSubscription.status;
-
-    // Set end date if marking as inactive/cancelled
-    if (status === 'inactive' || status === 'cancelled') {
-        userSubscription.endDate = new Date();
-    } else if (status === 'active' && (previousStatus === 'inactive' || previousStatus === 'canceled')) {
-        // Clear end date if reactivating
-        userSubscription.endDate = null;
-    }
-
-    await userSubscription.save();
-
-    return {
-        subscriptionId: userSubscription._id,
-        previousStatus,
-        currentStatus: status,
-        updatedAt: new Date(),
-        subscription: {
-            id: userSubscription._id,
-            userId: userSubscription.user,
-            planId: userSubscription.subscriptionPlan,
-            status: userSubscription.status,
-            startDate: userSubscription.startDate,
-            endDate: userSubscription.endDate,
-            type: userSubscription.type
-        }
-    };
-}
-
 
 const paymentServices = {
     createCheckoutSession,
     handleStripeWebhook,
     verifyPayment,
-    updateSubscriptionStatus,
 };
 
 export default paymentServices;

@@ -58,59 +58,25 @@ const verifyPayment = catchAsync(async (req: Request, res: Response) => {
         };
 
         const result = await paymentServices.verifyPayment(session_id);
-
-    } catch (error: any) {
-
-    }
-});
-
-
-// Update Subscription Status
-const updateSubscriptionStatus = catchAsync(async (req: Request, res: Response) => {
-    try {
-        const userId = req.user?.id;
-        const { subscriptionId, status } = req.body;
-
-        // Validate status
-        const validStatuses = ['active', 'inactive', 'cancelled', 'pending', 'trialing'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid status. Valid statuses are: ' + validStatuses.join(', ')
-            });
-        }
-
-        if (!userId || typeof userId !== 'string') {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing or invalid userId'
-            });
-        }
-
-        const result = await paymentServices.updateSubscriptionStatus({
-            userId,
-            subscriptionId,
-            status
-        });
-
         res.status(200).json({
-            success: true,
-            message: 'Subscription status updated successfully',
-            data: result
+            result
         });
+
     } catch (error: any) {
+
         res.status(400).json({
             success: false,
-            message: error.message || 'Failed to update subscription status'
+            message: error.message || 'Payment verification failed'
         });
     }
 });
+
+
 
 const paymentController = {
     createCheckout,
     stripeWebhook,
-    verifyPayment,
-    updateSubscriptionStatus,
+    verifyPayment
 };
 
 export default paymentController;

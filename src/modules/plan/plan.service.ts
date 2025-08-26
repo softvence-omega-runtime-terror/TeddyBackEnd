@@ -5,6 +5,13 @@ import { PlanModel } from "./plan.model";
 
 const createPlan = async (data: Partial<TPlan>) => {
     try {
+
+        const findPlan = await PlanModel.findOne({ name: data.name, price: data.price });
+        
+        if (findPlan) {
+            throw new Error("Plan with the same name and price already exists");
+        };
+
         // Validate billingInterval if subscription
         if (data.subscription && !data.billingInterval) {
             throw new Error("Billing interval is required for subscription plans");

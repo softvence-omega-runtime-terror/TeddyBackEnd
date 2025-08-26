@@ -51,10 +51,10 @@ const moduleRouts = [
     path: '/payment',
     router: paymentRoutes,
   },
-  // {
-  //   path: '/',
-  //   router: userSubscriptionRoutes,
-  // }
+  {
+    path: '/subscription',
+    router: userSubscriptionRoutes,
+  }
 ];
 
 moduleRouts.forEach(({ path, router }) => {

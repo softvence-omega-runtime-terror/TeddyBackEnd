@@ -12,8 +12,5 @@ paymentRoutes.post('/create-checkout-session', auth([userRole.admin, userRole.us
 // verify payment
 paymentRoutes.post('/verify-payment', auth([userRole.admin, userRole.user]), paymentController.verifyPayment);
 
-// update subscription status
-paymentRoutes.patch('/update-subscription-status', auth([userRole.admin, userRole.user]), paymentController.updateSubscriptionStatus);
-
 
 export default paymentRoutes;
