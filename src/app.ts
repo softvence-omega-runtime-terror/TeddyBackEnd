@@ -4,6 +4,11 @@ import cors from 'cors';
 import globalErrorHandler from './middleware/globalErrorHandler';
 import routeNotFound from './middleware/routeNotFound';
 import Routes from './routes';
+import paymentController from './modules/payment/payment.controller';
+
+
+// Import the stripeWebhook controller
+app.post("/api/payment/webhook", express.raw({ type: "application/json" }), paymentController.stripeWebhook);
 
 // middleWares
 app.use(express.json());

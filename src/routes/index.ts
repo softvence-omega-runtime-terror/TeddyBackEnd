@@ -6,6 +6,9 @@ import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpenc
 import reportRoutes from '../modules/report/report.route';
 import historyRoutes from '../modules/history/history.route';
 import { transectionRoutes } from '../modules/transection/transection.route';
+import planRoutes from '../modules/plan/plan.routes';
+import userSubscriptionRoutes from '../modules/userSubscription/userSubscription.route';
+import paymentRoutes from '../modules/payment/payment.route';
 
 
 const Routes = express.Router();
@@ -39,6 +42,18 @@ const moduleRouts = [
   {
     path: '/transection',
     router: transectionRoutes,
+  },
+  {
+    path: '/',
+    router: planRoutes,
+  },
+  {
+    path: '/payment',
+    router: paymentRoutes,
+  },
+  {
+    path: '/subscription',
+    router: userSubscriptionRoutes,
   }
 ];
 

@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import Stripe from 'stripe';
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 const config = {
@@ -26,5 +27,7 @@ const config = {
 
   App_Download_Url:process.env.APP_DOWNLOAD_URL as string,
 };
+
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export default config;
