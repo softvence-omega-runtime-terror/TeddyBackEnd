@@ -79,6 +79,68 @@ const getAllExpensesType = catchAsync(async (req, res) => {
   });
 });
 
+// Update Income Type
+const updateIncomeType = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const typeId = req.params.typeId;
+  const payload = req.body.data ? JSON.parse(req.body.data) : req.body;
+  const file = req.file;
+
+  const result = await incomeAndExpensesService.updateIncomeType(user_id, typeId, payload, file);
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income Type updated successfully',
+  });
+});
+
+// Delete Income Type
+const deleteIncomeType = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const typeId = req.params.typeId;
+
+  const result = await incomeAndExpensesService.deleteIncomeType(user_id, typeId);
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income Type deleted successfully',
+  });
+});
+
+// Update Expenses Type
+const updateExpensesType = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const typeId = req.params.typeId;
+  const payload = req.body.data ? JSON.parse(req.body.data) : req.body;
+  const file = req.file;
+
+  const result = await incomeAndExpensesService.updateExpensesType(user_id, typeId, payload, file);
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Expenses Type updated successfully',
+  });
+});
+
+// Delete Expenses Type
+const deleteExpensesType = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const typeId = req.params.typeId;
+
+  const result = await incomeAndExpensesService.deleteExpensesType(user_id, typeId);
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Expenses Type deleted successfully',
+  });
+});
+
+
+
 
 //---------------------------//=========================
 
@@ -125,17 +187,17 @@ const getAllPersonalGroup = catchAsync(async (req, res) => {
 });
 const leaveGroupOrKickOut = catchAsync(async (req, res) => {
   const userId = req.user.id;
-  const user_id = idConverter(userId as string) as Types.ObjectId;  
+  const user_id = idConverter(userId as string) as Types.ObjectId;
   const groupId = req.body.groupId as string;
   const group_id = idConverter(groupId) as Types.ObjectId;
-  const memberId = req.body.memberId as string ;
+  const memberId = req.body.memberId as string;
   const member_id = idConverter(memberId) as Types.ObjectId;  // Convert to ObjectId or null if not provided
 
- const result = await incomeAndExpensesService.leaveGroupOrKickOut(
+  const result = await incomeAndExpensesService.leaveGroupOrKickOut(
     user_id,
     group_id,
     member_id,
-  );  
+  );
   res.status(200).json({
     status: 'success',
     data: result,
@@ -189,7 +251,7 @@ const getSingleGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
   const groupId = req.query.groupId as string;
-  const group_id = idConverter(groupId) as Types.ObjectId;  
+  const group_id = idConverter(groupId) as Types.ObjectId;
   const result = await incomeAndExpensesService.getSingleGroup(
     user_id,
     group_id,
@@ -205,12 +267,12 @@ const deleteGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
   const groupId = req.body.groupId as string;
-  const group_id = idConverter(groupId) as Types.ObjectId;   
+  const group_id = idConverter(groupId) as Types.ObjectId;
 
   const result = await incomeAndExpensesService.deleteGroup(
     user_id,
     group_id,
-  ); 
+  );
   res.status(200).json({
     status: 'success',
     data: result,
@@ -224,14 +286,14 @@ const deleteGroup = catchAsync(async (req, res) => {
 
 const getIndividualExpenseOrIncome = catchAsync(async (req, res) => {
   const userId = req.user.id;
-  const user_id = idConverter(userId as string) as Types.ObjectId;  
+  const user_id = idConverter(userId as string) as Types.ObjectId;
   const incomeOrExpenseId = req.query.incomeOrExpenseId as string;
   const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId
 
   const result = await incomeAndExpensesService.getIndividualExpenseOrIncome(
     user_id,
     incomeOrExpense_id,
-  );  
+  );
   res.status(200).json({
     status: 'success',
     data: result,
@@ -269,12 +331,78 @@ const getAllIncomeAndExpenses = catchAsync(async (req, res) => {
   });
 });
 
+const getFilteredIncomeAndExpenses = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const userEmail = req.user.email as string | undefined;
+
+  // Extract filter options from request body
+  const {
+    balanceOverview, // "totalRemaining" | "totalExpense" | "totalIncome"
+    transactionType, // "all" | "expense" | "income"
+    month, // "Jun 2025" format or null for all months
+    type_id,
+    group_id,
+    searchText, // Optional search in description
+    sortBy, // "date" | "amount"
+    sortOrder // "asc" | "desc"
+  } = req.body;
+
+  const result = await incomeAndExpensesService.getFilteredIncomeAndExpenses(
+    user_id,
+    userEmail,
+    {
+      balanceOverview,
+      transactionType,
+      month,
+      type_id: type_id ? (idConverter(type_id) ?? undefined) : undefined,
+      group_id: group_id ? (idConverter(group_id) ?? undefined) : undefined,
+      searchText,
+      sortBy: sortBy || 'date',
+      sortOrder: sortOrder || 'desc'
+    }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+  });
+});
+
+const getAnalyticsDashboard = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const userEmail = req.user.email as string | undefined;
+
+  // Extract parameters from request body
+  const {
+    viewType, // "monthly" | "yearly"
+    year, // 2025
+    month, // "Jun" (only for monthly view)
+  } = req.body;
+
+  const result = await incomeAndExpensesService.getAnalyticsDashboard(
+    user_id,
+    userEmail,
+    {
+      viewType: viewType || 'monthly',
+      year: year || new Date().getFullYear(),
+      month: month || null
+    }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+  });
+});
+
 const modifyIncomeOrExpenses = catchAsync(async (req, res) => {
   const userId = req.user.id;
-  const user_id = idConverter(userId as string) as Types.ObjectId;    
+  const user_id = idConverter(userId as string) as Types.ObjectId;
   const payload = req.body;
   const incomeOrExpenseId = req.query.incomeOrExpenseId as string;
-  const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId 
+  const incomeOrExpense_id = idConverter(incomeOrExpenseId) as Types.ObjectId
 
   const result = await incomeAndExpensesService.modifyIncomeOrExpenses(
     user_id,
@@ -317,6 +445,10 @@ const incomeAndExpensesController = {
   createIncomeType,
   getAllIncomeType,
   createExpensesType,
+  updateIncomeType,
+  deleteIncomeType,
+  updateExpensesType,
+  deleteExpensesType,
   createOrUpdateExpenseOrIncomeGroup,
   getAllExpensesType,
   getAllPersonalGroup,
@@ -325,6 +457,8 @@ const incomeAndExpensesController = {
   getSingleGroup,
   getIndividualExpenseOrIncome,
   getAllIncomeAndExpenses,
+  getFilteredIncomeAndExpenses,
+  getAnalyticsDashboard,
   modifyIncomeOrExpenses,
   reDistributeAmountAmongMember
 };

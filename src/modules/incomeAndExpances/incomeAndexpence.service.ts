@@ -236,8 +236,11 @@ const createExpensesType = async (
 };
 const getAllExpensesType = async (user_id: Types.ObjectId) => {
   try {
+    console.log('Fetching expense types for user_id:', user_id);
     // Find user-specific expense types
     const userExpenseTypes = await ExpenseTypesModel.findOne({ user_id });
+
+    console.log('User-specific expense types:', userExpenseTypes);
 
     // Find common expense types (where user_id is null)
     const commonExpenseTypes = await ExpenseTypesModel.findOne({
@@ -263,6 +266,87 @@ const getAllExpensesType = async (user_id: Types.ObjectId) => {
     throw new Error(`Failed to fetch expense types: ${error.message}`);
   }
 };
+
+// Update Income Type Service
+const updateIncomeType = async (user_id: Types.ObjectId, typeId: string, payload: any, file: any) => {
+  try {
+    const query = user_id ? { user_id } : { user_id: null };
+    const doc = await IncomeTypesModel.findOne(query);
+    if (!doc) throw new Error('Income type document not found');
+    const idx = doc.incomeTypeList.findIndex((t: any) => t._id.toString() === typeId);
+    if (idx === -1) throw new Error('Income type not found');
+    if (payload.name) doc.incomeTypeList[idx].name = payload.name;
+    if (file) {
+      const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
+      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+      doc.incomeTypeList[idx].img = uploadResult.secure_url;
+    }
+    await doc.save();
+    return doc;
+  } catch (error: any) {
+    console.error('Error in updateIncomeType service:', error.message);
+    throw new Error(`Failed to update income type: ${error.message}`);
+  }
+};
+
+// Delete Income Type Service
+const deleteIncomeType = async (user_id: Types.ObjectId, typeId: string) => {
+  try {
+    const query = user_id ? { user_id } : { user_id: null };
+    const doc = await IncomeTypesModel.findOne(query);
+    if (!doc) throw new Error('Income type document not found');
+    const idx = doc.incomeTypeList.findIndex((t: any) => t._id.toString() === typeId);
+    if (idx === -1) throw new Error('Income type not found');
+    doc.incomeTypeList.splice(idx, 1);
+    await doc.save();
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in deleteIncomeType service:', error.message);
+    throw new Error(`Failed to delete income type: ${error.message}`);
+  }
+};
+
+// Update Expenses Type Service
+const updateExpensesType = async (user_id: Types.ObjectId, typeId: string, payload: any, file: any) => {
+  try {
+    const query = user_id ? { user_id } : { user_id: null };
+    const doc = await ExpenseTypesModel.findOne(query);
+    if (!doc) throw new Error('Expenses type document not found');
+    const idx = doc.expenseTypeList.findIndex((t: any) => t._id.toString() === typeId);
+    if (idx === -1) throw new Error('Expenses type not found');
+    if (payload.name) doc.expenseTypeList[idx].name = payload.name;
+    if (file) {
+      const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
+      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+      doc.expenseTypeList[idx].img = uploadResult.secure_url;
+    }
+    await doc.save();
+    return doc;
+  } catch (error: any) {
+    console.error('Error in updateExpensesType service:', error.message);
+    throw new Error(`Failed to update expenses type: ${error.message}`);
+  }
+};
+
+// Delete Expenses Type Service
+const deleteExpensesType = async (user_id: Types.ObjectId, typeId: string) => {
+  try {
+    const query = user_id ? { user_id } : { user_id: null };
+    const doc = await ExpenseTypesModel.findOne(query);
+    if (!doc) throw new Error('Expenses type document not found');
+    const idx = doc.expenseTypeList.findIndex((t: any) => t._id.toString() === typeId);
+    if (idx === -1) throw new Error('Expenses type not found');
+    doc.expenseTypeList.splice(idx, 1);
+    await doc.save();
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in deleteExpensesType service:', error.message);
+    throw new Error(`Failed to delete expenses type: ${error.message}`);
+  }
+};
+
+
+
 
 //===============//=========================== Group Routes ========================
 
@@ -1078,7 +1162,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       // Ensure all participated members are accounted for in contribution_list
       finalContributionList = finalPerticipatedMembers.map((email) => {
         const contribution = contribution_list.find(
-          (c : any) =>
+          (c: any) =>
             c.member_email === email ||
             (isValidObjectId(c.member_email) && activeMembers.find((m) => m.email === email)?.member_id?.toString() === c.member_email.toString()),
         );
@@ -1113,7 +1197,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       const borrowedOrLendAmount = contributedAmount - shareAmount;
       const inDebt = borrowedOrLendAmount < 0;
 
-      const transactionData= {
+      const transactionData = {
         transactionType,
         transaction_Code,
         currency,
@@ -1557,21 +1641,591 @@ const getAllIncomeAndExpenses = async (
 
   return transactionType === 'income'
     ? {
-        totalIncome: Number(totalIncome) || 0,
-        transactionsList: transactionsList || [],
-      }
+      totalIncome: Number(totalIncome) || 0,
+      transactionsList: transactionsList || [],
+    }
     : transactionType === 'expense'
       ? {
-          totalExpenses: Number(totalExpenses) || 0,
-          transactionsList: transactionsList || [],
-        }
+        totalExpenses: Number(totalExpenses) || 0,
+        transactionsList: transactionsList || [],
+      }
       : {
-          totalIncome: Number(totalIncome) || 0,
-          totalExpenses: Number(totalExpenses) || 0,
-          remainingBalance: Number(totalIncome) - Number(totalExpenses) || 0,
-          transactionsList: transactionsList || [],
-        };
+        totalIncome: Number(totalIncome) || 0,
+        totalExpenses: Number(totalExpenses) || 0,
+        remainingBalance: Number(totalIncome) - Number(totalExpenses) || 0,
+        transactionsList: transactionsList || [],
+      };
 };
+
+// New filtered service method
+const getFilteredIncomeAndExpenses = async (
+  user_id: Types.ObjectId,
+  userEmail?: string,
+  filters?: {
+    balanceOverview?: 'totalRemaining' | 'totalExpense' | 'totalIncome';
+    transactionType?: 'all' | 'expense' | 'income';
+    month?: string; // Format: "Jun 2025", "May 2025", etc.
+    type_id?: Types.ObjectId;
+    group_id?: Types.ObjectId;
+    searchText?: string;
+    sortBy?: 'date' | 'amount';
+    sortOrder?: 'asc' | 'desc';
+  }
+) => {
+  if (!user_id) {
+    throw new Error('User ID is required to fetch income and expenses');
+  }
+
+  // Build the base query
+  const query: any = { user_id };
+
+  // Add type_id filter
+  if (filters?.type_id) {
+    query.type_id = filters.type_id;
+  }
+
+  // Add group_id filter
+  if (filters?.group_id) {
+    query.group_id = filters.group_id;
+  }
+
+  // Add transaction type filter
+  if (filters?.transactionType && filters.transactionType !== 'all') {
+    query.transactionType = filters.transactionType;
+    // Match spender_id_Or_Email for expenses or earnedBy_id_Or_Email for income
+    const field = filters.transactionType === 'expense' ? 'spender_id_Or_Email' : 'earnedBy_id_Or_Email';
+    query[field] = {
+      $in: [user_id, ...(userEmail ? [userEmail] : [])],
+    };
+  } else {
+    // If no specific transaction type, match either spender_id_Or_Email or earnedBy_id_Or_Email
+    query.$or = [
+      {
+        transactionType: 'expense',
+        spender_id_Or_Email: {
+          $in: [user_id, ...(userEmail ? [userEmail] : [])],
+        },
+      },
+      {
+        transactionType: 'income',
+        earnedBy_id_Or_Email: {
+          $in: [user_id, ...(userEmail ? [userEmail] : [])],
+        },
+      },
+    ];
+  }
+
+  // Add month filter
+  if (filters?.month) {
+    const [monthName, year] = filters.month.split(' ');
+    const monthMap: { [key: string]: number } = {
+      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+    };
+    
+    if (monthMap[monthName] !== undefined && year) {
+      const startDate = new Date(parseInt(year), monthMap[monthName], 1);
+      const endDate = new Date(parseInt(year), monthMap[monthName] + 1, 0, 23, 59, 59);
+      
+      query.date = {
+        $gte: startDate.toISOString(),
+        $lte: endDate.toISOString()
+      };
+    }
+  }
+
+  // Add search text filter for description and type names
+  if (filters?.searchText) {
+    // First, get all type IDs that match the search text
+    const [expenseTypeMatches, incomeTypeMatches] = await Promise.all([
+      ExpenseTypesModel.find({
+        user_id: { $in: [user_id, null] },
+        'expenseTypeList.name': { $regex: filters.searchText, $options: 'i' }
+      }).lean(),
+      IncomeTypesModel.find({
+        user_id: { $in: [user_id, null] },
+        'incomeTypeList.name': { $regex: filters.searchText, $options: 'i' }
+      }).lean()
+    ]);
+
+    // Extract matching type IDs
+    const matchingTypeIds: Types.ObjectId[] = [];
+    
+    expenseTypeMatches.forEach(doc => {
+      doc.expenseTypeList.forEach((type: any) => {
+        if (type.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
+          matchingTypeIds.push(type._id);
+        }
+      });
+    });
+
+    incomeTypeMatches.forEach(doc => {
+      doc.incomeTypeList.forEach((type: any) => {
+        if (type.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
+          matchingTypeIds.push(type._id);
+        }
+      });
+    });
+
+    // Add search conditions for both description and type IDs
+    query.$and = query.$and || [];
+    query.$and.push({
+      $or: [
+        {
+          description: {
+            $regex: filters.searchText,
+            $options: 'i' // Case insensitive
+          }
+        },
+        {
+          type_id: { $in: matchingTypeIds }
+        }
+      ]
+    });
+  }
+
+  // Set up sorting
+  const sortOptions: any = {};
+  const sortBy = filters?.sortBy || 'date';
+  const sortOrder = filters?.sortOrder === 'asc' ? 1 : -1;
+  sortOptions[sortBy] = sortOrder;
+
+  // Fetch transactions
+  const transactions = await TransactionModel.find(query)
+    .sort(sortOptions)
+    .lean();
+
+  // Calculate totals
+  const totalIncome = transactions
+    .filter((t) => t.transactionType === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpenses = transactions
+    .filter((t) => t.transactionType === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const remainingBalance = totalIncome - totalExpenses;
+
+  // Apply balance overview filter
+  let filteredTransactions = transactions;
+  if (filters?.balanceOverview) {
+    switch (filters.balanceOverview) {
+      case 'totalExpense':
+        // Show only expenses
+        filteredTransactions = transactions.filter(t => t.transactionType === 'expense');
+        break;
+      case 'totalIncome':
+        // Show only income
+        filteredTransactions = transactions.filter(t => t.transactionType === 'income');
+        break;
+      case 'totalRemaining':
+        // Show all transactions (default behavior)
+        break;
+    }
+  }
+
+  // Create transactions list with type names
+  const transactionsList = await Promise.all(
+    filteredTransactions.map(async (t) => {
+      let typeName = null;
+      
+      // Get the type name for this transaction
+      if (t.type_id) {
+        if (t.transactionType === 'expense') {
+          const expenseType = await ExpenseTypesModel.findOne({
+            user_id: { $in: [user_id, null] },
+            'expenseTypeList._id': t.type_id,
+          }).lean();
+          if (expenseType) {
+            const type = expenseType.expenseTypeList.find(
+              (type: any) => type._id.toString() === t.type_id.toString(),
+            );
+            typeName = type ? type.name : null;
+          }
+        } else if (t.transactionType === 'income') {
+          const incomeType = await IncomeTypesModel.findOne({
+            user_id: { $in: [user_id, null] },
+            'incomeTypeList._id': t.type_id,
+          }).lean();
+          if (incomeType) {
+            const type = incomeType.incomeTypeList.find(
+              (type: any) => type._id.toString() === t.type_id.toString(),
+            );
+            typeName = type ? type.name : null;
+          }
+        }
+      }
+
+      return {
+        _id: t._id,
+        amount: t.amount,
+        currency: t.currency,
+        date: t.date,
+        description: t.description,
+        transactionType: t.transactionType,
+        type_id: t.type_id,
+        typeName, // Include the type name in response
+        isGroupTransaction: t.isGroupTransaction,
+        group_id: t.group_id,
+        spender_id_Or_Email: t.spender_id_Or_Email,
+        earnedBy_id_Or_Email: t.earnedBy_id_Or_Email,
+      };
+    })
+  );
+
+  // Get available months for filter dropdown
+  const availableMonths = await TransactionModel.aggregate([
+    { $match: { user_id } },
+    {
+      $group: {
+        _id: {
+          year: { $year: { $dateFromString: { dateString: "$date" } } },
+          month: { $month: { $dateFromString: { dateString: "$date" } } }
+        }
+      }
+    },
+    { $sort: { "_id.year": -1, "_id.month": -1 } }
+  ]);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const formattedMonths = availableMonths.map(m => `${monthNames[m._id.month - 1]} ${m._id.year}`);
+
+  return {
+    totalIncome: Number(totalIncome) || 0,
+    totalExpenses: Number(totalExpenses) || 0,
+    remainingBalance: Number(remainingBalance) || 0,
+    transactionsList: transactionsList || [],
+    availableMonths: formattedMonths,
+    appliedFilters: filters,
+    totalCount: transactionsList.length
+  };
+};
+
+// Analytics Dashboard Service
+const getAnalyticsDashboard = async (
+  user_id: Types.ObjectId,
+  userEmail?: string,
+  options?: {
+    viewType: 'monthly' | 'yearly';
+    year: number;
+    month?: string; // "Jun", "May", etc. (only for monthly view)
+  }
+) => {
+  if (!user_id) {
+    throw new Error('User ID is required to fetch analytics dashboard');
+  }
+
+  const { viewType = 'monthly', year, month } = options || {};
+
+  if (viewType === 'monthly') {
+    return await getMonthlyAnalytics(user_id, userEmail, year, month);
+  } else {
+    return await getYearlyAnalytics(user_id, userEmail, year);
+  }
+};
+
+// Monthly Analytics Helper
+const getMonthlyAnalytics = async (
+  user_id: Types.ObjectId,
+  userEmail?: string,
+  year?: number,
+  month?: string
+) => {
+  const currentYear = year || new Date().getFullYear();
+  const currentMonth = month || new Date().toLocaleDateString('en-US', { month: 'short' });
+  
+  // Month mapping
+  const monthMap: { [key: string]: number } = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  };
+
+  const monthNumber = monthMap[currentMonth];
+  const startDate = new Date(currentYear, monthNumber, 1);
+  const endDate = new Date(currentYear, monthNumber + 1, 0, 23, 59, 59);
+
+  // Base query for the specific month
+  const baseQuery: any = {
+    user_id,
+    date: {
+      $gte: startDate.toISOString(),
+      $lte: endDate.toISOString()
+    },
+    $or: [
+      {
+        transactionType: 'expense',
+        spender_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] }
+      },
+      {
+        transactionType: 'income',
+        earnedBy_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] }
+      }
+    ]
+  };
+
+  // Get all transactions for the month
+  const transactions = await TransactionModel.find(baseQuery).lean();
+
+  // Calculate totals
+  const totalIncome = transactions
+    .filter(t => t.transactionType === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpenses = transactions
+    .filter(t => t.transactionType === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const savingAmount = totalIncome - totalExpenses;
+  const savingPercentage = totalIncome > 0 ? Math.round((savingAmount / totalIncome) * 100) : 0;
+
+  // Get category breakdown for expenses
+  const expenseTransactions = transactions.filter(t => t.transactionType === 'expense');
+  const expenseCategoryBreakdown = await getCategoryBreakdown(user_id, expenseTransactions, totalExpenses, 'expense');
+
+  // Get category breakdown for income
+  const incomeTransactions = transactions.filter(t => t.transactionType === 'income');
+  const incomeCategoryBreakdown = await getCategoryBreakdown(user_id, incomeTransactions, totalIncome, 'income');
+
+  // Get available months for navigation
+  const availableMonths = await getAvailableMonths(user_id, currentYear);
+
+  return {
+    viewType: 'monthly',
+    period: `${currentMonth} ${currentYear}`,
+    summary: {
+      totalIncome: Number(totalIncome) || 0,
+      totalExpenses: Number(totalExpenses) || 0,
+      savingAmount: Number(savingAmount) || 0,
+      savingPercentage: savingPercentage
+    },
+    expenseCategoryBreakdown,
+    incomeCategoryBreakdown,
+    availableMonths,
+    navigation: {
+      currentYear,
+      currentMonth,
+      availableYears: await getAvailableYears(user_id)
+    }
+  };
+};
+
+// Yearly Analytics Helper
+const getYearlyAnalytics = async (
+  user_id: Types.ObjectId,
+  userEmail?: string,
+  year?: number
+) => {
+  const currentYear = year || new Date().getFullYear();
+  
+  // Get data for entire year
+  const startDate = new Date(currentYear, 0, 1);
+  const endDate = new Date(currentYear, 11, 31, 23, 59, 59);
+
+  const baseQuery: any = {
+    user_id,
+    date: {
+      $gte: startDate.toISOString(),
+      $lte: endDate.toISOString()
+    },
+    $or: [
+      {
+        transactionType: 'expense',
+        spender_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] }
+      },
+      {
+        transactionType: 'income',
+        earnedBy_id_Or_Email: { $in: [user_id, ...(userEmail ? [userEmail] : [])] }
+      }
+    ]
+  };
+
+  // Aggregate by month
+  const monthlyData = await TransactionModel.aggregate([
+    { $match: baseQuery },
+    {
+      $addFields: {
+        dateObj: { $dateFromString: { dateString: "$date" } }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          month: { $month: "$dateObj" },
+          transactionType: "$transactionType"
+        },
+        total: { $sum: "$amount" }
+      }
+    },
+    { $sort: { "_id.month": 1 } }
+  ]);
+
+  // Process monthly data
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthlyBreakdown = [];
+  let yearlyTotalIncome = 0;
+  let yearlyTotalExpenses = 0;
+
+  for (let i = 0; i < 12; i++) {
+    const monthName = monthNames[i];
+    const monthIncome = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'income')?.total || 0;
+    const monthExpenses = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'expense')?.total || 0;
+    
+    yearlyTotalIncome += monthIncome;
+    yearlyTotalExpenses += monthExpenses;
+
+    monthlyBreakdown.push({
+      month: monthName,
+      monthNumber: i + 1,
+      income: Number(monthIncome) || 0,
+      expenses: Number(monthExpenses) || 0,
+      net: Number(monthIncome - monthExpenses) || 0
+    });
+  }
+
+  const yearlySavingAmount = yearlyTotalIncome - yearlyTotalExpenses;
+  const yearlySavingPercentage = yearlyTotalIncome > 0 ? Math.round((yearlySavingAmount / yearlyTotalIncome) * 100) : 0;
+
+  return {
+    viewType: 'yearly',
+    period: `${currentYear}`,
+    summary: {
+      totalIncome: Number(yearlyTotalIncome) || 0,
+      totalExpenses: Number(yearlyTotalExpenses) || 0,
+      savingAmount: Number(yearlySavingAmount) || 0,
+      savingPercentage: yearlySavingPercentage
+    },
+    monthlyBreakdown,
+    navigation: {
+      currentYear,
+      availableYears: await getAvailableYears(user_id)
+    }
+  };
+};
+
+// Helper: Get Category Breakdown
+const getCategoryBreakdown = async (
+  user_id: Types.ObjectId, 
+  transactions: any[], 
+  totalAmount: number,
+  transactionType: 'expense' | 'income'
+) => {
+  if (transactions.length === 0) return [];
+
+  // Group transactions by type_id
+  const typeGroups = transactions.reduce((acc, transaction) => {
+    const typeId = transaction.type_id.toString();
+    if (!acc[typeId]) {
+      acc[typeId] = {
+        typeId,
+        amount: 0,
+        count: 0,
+        transactions: []
+      };
+    }
+    acc[typeId].amount += transaction.amount;
+    acc[typeId].count += 1;
+    acc[typeId].transactions.push(transaction);
+    return acc;
+  }, {});
+
+  // Get type names and create breakdown
+  const categoryBreakdown = await Promise.all(
+    Object.values(typeGroups).map(async (group: any) => {
+      let typeName = 'Unknown';
+      
+      // Find the type name based on transaction type
+      if (transactionType === 'expense') {
+        const expenseType = await ExpenseTypesModel.findOne({
+          user_id: { $in: [user_id, null] },
+          'expenseTypeList._id': group.typeId
+        }).lean();
+        
+        if (expenseType) {
+          const type = expenseType.expenseTypeList.find(
+            (t: any) => t._id.toString() === group.typeId
+          );
+          typeName = type ? type.name : 'Unknown';
+        }
+      } else if (transactionType === 'income') {
+        const incomeType = await IncomeTypesModel.findOne({
+          user_id: { $in: [user_id, null] },
+          'incomeTypeList._id': group.typeId
+        }).lean();
+        
+        if (incomeType) {
+          const type = incomeType.incomeTypeList.find(
+            (t: any) => t._id.toString() === group.typeId
+          );
+          typeName = type ? type.name : 'Unknown';
+        }
+      }
+
+      const percentage = totalAmount > 0 ? Math.round((group.amount / totalAmount) * 100) : 0;
+
+      return {
+        typeId: group.typeId,
+        typeName,
+        amount: Number(group.amount) || 0,
+        percentage,
+        transactionCount: group.count,
+        transactionType
+      };
+    })
+  );
+
+  // Sort by amount descending
+  return categoryBreakdown.sort((a, b) => b.amount - a.amount);
+};
+
+// Helper: Get Available Months for a year
+const getAvailableMonths = async (user_id: Types.ObjectId, year: number) => {
+  const monthsData = await TransactionModel.aggregate([
+    {
+      $match: {
+        user_id,
+        date: {
+          $gte: new Date(year, 0, 1).toISOString(),
+          $lte: new Date(year, 11, 31, 23, 59, 59).toISOString()
+        }
+      }
+    },
+    {
+      $addFields: {
+        dateObj: { $dateFromString: { dateString: "$date" } }
+      }
+    },
+    {
+      $group: {
+        _id: { $month: "$dateObj" }
+      }
+    },
+    { $sort: { "_id": -1 } }
+  ]);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return monthsData.map(m => monthNames[m._id - 1]);
+};
+
+// Helper: Get Available Years
+const getAvailableYears = async (user_id: Types.ObjectId) => {
+  const yearsData = await TransactionModel.aggregate([
+    { $match: { user_id } },
+    {
+      $addFields: {
+        dateObj: { $dateFromString: { dateString: "$date" } }
+      }
+    },
+    {
+      $group: {
+        _id: { $year: "$dateObj" }
+      }
+    },
+    { $sort: { "_id": -1 } }
+  ]);
+
+  return yearsData.map(y => y._id);
+};
+
 const getIndividualExpenseOrIncome = async (
   user_id: Types.ObjectId,
   incomeOrExpense_id: Types.ObjectId,
@@ -2006,7 +2660,7 @@ const reDistributeAmountAmongMember = async (
       await localSession.commitTransaction();
     }
 
-    return {transactions:transactions, message: 'Redistribution successful', success: true};
+    return { transactions: transactions, message: 'Redistribution successful', success: true };
   } catch (error: any) {
     // Abort transaction if we started it
     if (localSession) {
@@ -2030,6 +2684,10 @@ const incomeAndExpensesService = {
   createExpensesType,
   getAllIncomeType,
   getAllExpensesType,
+  updateIncomeType,
+  deleteIncomeType,
+  updateExpensesType,
+  deleteExpensesType,
   createOrUpdateExpenseOrIncomeGroup,
   addIncomeOrExpenses,
   getAllPersonalGroup,
@@ -2039,8 +2697,10 @@ const incomeAndExpensesService = {
   getIndividualExpenseOrIncome,
   modifyIncomeOrExpenses,
   getAllIncomeAndExpenses,
+  getFilteredIncomeAndExpenses,
+  getAnalyticsDashboard,
   getGroupMembers,
-  reDistributeAmountAmongMember
+  reDistributeAmountAmongMember,
 };
 
 export default incomeAndExpensesService;
