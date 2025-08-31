@@ -5,6 +5,7 @@ import idConverter from '../../util/idConverter';
 import userServices from './user.service';
 
 const createUser = catchAsync(async (req, res): Promise<void> => {
+  console.log("Request Body:", req.body); // Debugging line to check the request body
   const result = await userServices.createUser(req.body);
 
   res.status(200).json({

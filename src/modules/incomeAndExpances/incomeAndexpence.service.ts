@@ -1978,6 +1978,11 @@ const getMonthlyAnalytics = async (
   const savingAmount = totalIncome - totalExpenses;
   const savingPercentage = totalIncome > 0 ? Math.round((savingAmount / totalIncome) * 100) : 0;
 
+  // Calculate monthly percentages
+  const totalMonthlyAmount = totalIncome + totalExpenses;
+  const incomePercentage = totalMonthlyAmount > 0 ? Math.round((totalIncome / totalMonthlyAmount) * 100) : 0;
+  const expensePercentage = totalMonthlyAmount > 0 ? Math.round((totalExpenses / totalMonthlyAmount) * 100) : 0;
+
   // Get category breakdown for expenses
   const expenseTransactions = transactions.filter(t => t.transactionType === 'expense');
   const expenseCategoryBreakdown = await getCategoryBreakdown(user_id, expenseTransactions, totalExpenses, 'expense');
@@ -1985,6 +1990,9 @@ const getMonthlyAnalytics = async (
   // Get category breakdown for income
   const incomeTransactions = transactions.filter(t => t.transactionType === 'income');
   const incomeCategoryBreakdown = await getCategoryBreakdown(user_id, incomeTransactions, totalIncome, 'income');
+
+  // Enhanced individual type summary with income, expense, saving per type
+  const typesSummary = await getIndividualTypeSummary(user_id, transactions, totalIncome, totalExpenses);
 
   // Get available months for navigation
   const availableMonths = await getAvailableMonths(user_id, currentYear);
@@ -1996,10 +2004,16 @@ const getMonthlyAnalytics = async (
       totalIncome: Number(totalIncome) || 0,
       totalExpenses: Number(totalExpenses) || 0,
       savingAmount: Number(savingAmount) || 0,
-      savingPercentage: savingPercentage
+      savingPercentage: savingPercentage,
+      percentages: {
+        income: incomePercentage,
+        expense: expensePercentage,
+        saving: savingPercentage
+      }
     },
-    expenseCategoryBreakdown,
-    incomeCategoryBreakdown,
+    // expenseCategoryBreakdown,
+    // incomeCategoryBreakdown,
+    typesSummary,
     availableMonths,
     navigation: {
       currentYear,
@@ -2069,21 +2083,49 @@ const getYearlyAnalytics = async (
     const monthName = monthNames[i];
     const monthIncome = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'income')?.total || 0;
     const monthExpenses = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'expense')?.total || 0;
+    const monthSaving = monthIncome - monthExpenses;
     
     yearlyTotalIncome += monthIncome;
     yearlyTotalExpenses += monthExpenses;
+
+    // Calculate monthly percentages
+    const totalMonthlyAmount = monthIncome + monthExpenses;
+    const incomePercentage = totalMonthlyAmount > 0 ? Math.round((monthIncome / totalMonthlyAmount) * 100) : 0;
+    const expensePercentage = totalMonthlyAmount > 0 ? Math.round((monthExpenses / totalMonthlyAmount) * 100) : 0;
+    const savingPercentage = monthIncome > 0 ? Math.round((monthSaving / monthIncome) * 100) : 0;
 
     monthlyBreakdown.push({
       month: monthName,
       monthNumber: i + 1,
       income: Number(monthIncome) || 0,
       expenses: Number(monthExpenses) || 0,
-      net: Number(monthIncome - monthExpenses) || 0
+      saving: Number(monthSaving) || 0,
+      percentages: {
+        income: incomePercentage,
+        expense: expensePercentage,
+        saving: savingPercentage
+      }
     });
   }
 
   const yearlySavingAmount = yearlyTotalIncome - yearlyTotalExpenses;
   const yearlySavingPercentage = yearlyTotalIncome > 0 ? Math.round((yearlySavingAmount / yearlyTotalIncome) * 100) : 0;
+
+  // Calculate yearly percentages
+  const yearlyTotalAmount = yearlyTotalIncome + yearlyTotalExpenses;
+  const yearlyIncomePercentage = yearlyTotalAmount > 0 ? Math.round((yearlyTotalIncome / yearlyTotalAmount) * 100) : 0;
+  const yearlyExpensePercentage = yearlyTotalAmount > 0 ? Math.round((yearlyTotalExpenses / yearlyTotalAmount) * 100) : 0;
+
+  // Get category breakdown for the entire year
+  const allYearTransactions = await TransactionModel.find(baseQuery).lean();
+  
+  // Get expense category breakdown
+  const expenseTransactions = allYearTransactions.filter(t => t.transactionType === 'expense');
+  const expenseCategoryBreakdown = await getCategoryBreakdown(user_id, expenseTransactions, yearlyTotalExpenses, 'expense');
+
+  // Get income category breakdown  
+  const incomeTransactions = allYearTransactions.filter(t => t.transactionType === 'income');
+  const incomeCategoryBreakdown = await getCategoryBreakdown(user_id, incomeTransactions, yearlyTotalIncome, 'income');
 
   return {
     viewType: 'yearly',
@@ -2092,9 +2134,16 @@ const getYearlyAnalytics = async (
       totalIncome: Number(yearlyTotalIncome) || 0,
       totalExpenses: Number(yearlyTotalExpenses) || 0,
       savingAmount: Number(yearlySavingAmount) || 0,
-      savingPercentage: yearlySavingPercentage
+      savingPercentage: yearlySavingPercentage,
+      percentages: {
+        income: yearlyIncomePercentage,
+        expense: yearlyExpensePercentage,
+        saving: yearlySavingPercentage
+      }
     },
     monthlyBreakdown,
+    expenseCategoryBreakdown,
+    incomeCategoryBreakdown,
     navigation: {
       currentYear,
       availableYears: await getAvailableYears(user_id)
@@ -2175,6 +2224,120 @@ const getCategoryBreakdown = async (
 
   // Sort by amount descending
   return categoryBreakdown.sort((a, b) => b.amount - a.amount);
+};
+
+// Helper: Get Individual Type Summary for Monthly View
+const getIndividualTypeSummary = async (
+  user_id: Types.ObjectId,
+  transactions: any[],
+  totalIncome: number,
+  totalExpenses: number
+) => {
+  if (transactions.length === 0) return {};
+
+  // Group transactions by type_id first, then we'll merge by typeName
+  const typeGroups = transactions.reduce((acc, transaction) => {
+    const typeId = transaction.type_id.toString();
+    
+    if (!acc[typeId]) {
+      acc[typeId] = {
+        typeId,
+        typeName: '',
+        totalIncome: 0,
+        totalExpenses: 0,
+        transactionCount: 0
+      };
+    }
+    
+    if (transaction.transactionType === 'income') {
+      acc[typeId].totalIncome += transaction.amount;
+    } else {
+      acc[typeId].totalExpenses += transaction.amount;
+    }
+    
+    acc[typeId].transactionCount += 1;
+    return acc;
+  }, {});
+
+  // Get type names for each typeId
+  const typeWithNames = await Promise.all(
+    Object.values(typeGroups).map(async (group: any) => {
+      let typeName = 'Unknown';
+      
+      // Find the type name - check both income and expense types
+      const expenseType = await ExpenseTypesModel.findOne({
+        user_id: { $in: [user_id, null] },
+        'expenseTypeList._id': group.typeId
+      }).lean();
+      
+      if (expenseType) {
+        const type = expenseType.expenseTypeList.find(
+          (t: any) => t._id.toString() === group.typeId
+        );
+        typeName = type ? type.name : 'Unknown';
+      } else {
+        const incomeType = await IncomeTypesModel.findOne({
+          user_id: { $in: [user_id, null] },
+          'incomeTypeList._id': group.typeId
+        }).lean();
+        
+        if (incomeType) {
+          const type = incomeType.incomeTypeList.find(
+            (t: any) => t._id.toString() === group.typeId
+          );
+          typeName = type ? type.name : 'Unknown';
+        }
+      }
+
+      return {
+        ...group,
+        typeName
+      };
+    })
+  );
+
+  // Now group by typeName and merge data from different typeIds with same name
+  const typesSummaryObject: { [key: string]: any } = {};
+  
+  typeWithNames.forEach((group) => {
+    if (!typesSummaryObject[group.typeName]) {
+      typesSummaryObject[group.typeName] = {
+        Income: 0,
+        Expenses: 0,
+        savingAmount: 0,
+        percentages: {
+          income: 0,
+          expense: 0,
+          saving: 0
+        }
+      };
+    }
+    
+    // Add income and expenses to the existing type
+    typesSummaryObject[group.typeName].Income += group.totalIncome;
+    typesSummaryObject[group.typeName].Expenses += group.totalExpenses;
+  });
+
+  // Calculate final values for each type
+  Object.keys(typesSummaryObject).forEach((typeName) => {
+    const typeData = typesSummaryObject[typeName];
+    
+    // Calculate saving amount
+    typeData.savingAmount = typeData.Income - typeData.Expenses;
+    
+    // Calculate percentages
+    const typeTotal = typeData.Income + typeData.Expenses;
+    typeData.percentages.income = typeTotal > 0 ? Math.round((typeData.Income / typeTotal) * 100) : 0;
+    typeData.percentages.expense = typeTotal > 0 ? Math.round((typeData.Expenses / typeTotal) * 100) : 0;
+    typeData.percentages.saving = typeData.Income > 0 ? Math.round((typeData.savingAmount / typeData.Income) * 100) : 0;
+    
+    // Ensure numbers are properly formatted
+    typeData.Income = Number(typeData.Income) || 0;
+    typeData.Expenses = Number(typeData.Expenses) || 0;
+    typeData.savingAmount = Number(typeData.savingAmount) || 0;
+  });
+
+  return typesSummaryObject;
 };
 
 // Helper: Get Available Months for a year

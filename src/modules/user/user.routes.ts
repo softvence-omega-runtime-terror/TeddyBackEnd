@@ -9,6 +9,7 @@ const userRoutes = express.Router();
 // users routes
 userRoutes.post(
   '/createUser',
+  upload.single('image'),
   userController.createUser,
 );
 
