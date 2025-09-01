@@ -56,17 +56,42 @@ const logIn = async (
     }
   }
 
-  const updatedUser = await UserModel.findOneAndUpdate(
+  let updatedUser = await UserModel.findOneAndUpdate(
     { email },
     { isLoggedIn: true },
     { new: true },
   );
 
+  if (!updatedUser) {
+    throw new Error('Error logging in, try again');
+  }
+  
+  // Ensure profile exists
+  let userProfile = await ProfileModel.findOne({ user_id: updatedUser._id });
+
+  if (!userProfile) {
+    userProfile = new ProfileModel({
+      user_id: updatedUser._id,
+      name: updatedUser.name || 'User',
+      email: updatedUser.email,
+      phone: updatedUser.phone || '',
+    });
+    await userProfile.save();
+  }
+
+  // Create a merged user object with profile data
+  const userWithProfile = {
+    ...updatedUser.toObject(), // Convert Mongoose document to plain object
+    // profile: userProfile.toObject(),
+    // Or merge profile fields directly:
+    ...userProfile.toObject(),
+  };
+
   const tokenizeData = {
     id: user._id.toHexString(),
     role: user.role,
-    username: updatedUser?.name,
-    OTPVerified: updatedUser?.OTPVerified,
+    username: userWithProfile?.name || updatedUser?.name,
+    OTPVerified: userWithProfile?.OTPVerified || updatedUser?.OTPVerified,
   };
 
   const approvalToken = authUtil.createToken(
@@ -88,7 +113,7 @@ const logIn = async (
       'you are not a verified user. You wont be able to use some services. Please verify';
   }
 
-  return { approvalToken, refreshToken, updatedUser, message };
+  return { approvalToken, refreshToken, updatedUser: userWithProfile, message };
 };
 
 const logOut = async (userId: string) => {

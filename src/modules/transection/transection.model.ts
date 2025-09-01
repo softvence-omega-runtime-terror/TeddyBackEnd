@@ -6,7 +6,7 @@ const GroupsEachTransactionSummarySchema =
     {
       amount: { type: Number, required: true },
       currency: { type: String, required: true },
-      note: { type: String, required: true },
+      note: { type: String, required: false },
       groupId:{type:String, required:true},
       createdBy: {
         type: Schema.Types.ObjectId,

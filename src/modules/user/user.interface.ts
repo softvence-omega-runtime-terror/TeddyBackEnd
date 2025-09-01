@@ -39,6 +39,8 @@ export type TProfile = {
   totalCreatedGroups?:number;
   groupList?: Types.ObjectId[]; // Optional to align with schema
   assistantType : "Supportive_Friendly" | "SarcasticTruth-Teller";
+  startDate?:Date;
+  endDate?:Date;
   plan_id?:Types.ObjectId;
   planPurchaseDate?:Date;
   img?: string;

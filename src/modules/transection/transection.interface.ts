@@ -4,7 +4,7 @@ export type TGroupsEachTransactionSummary = {
   amount: number;
 
   currency:string;
-  note:string;
+  note?:string;
   createdBy: Types.ObjectId;
   groupId:String
 

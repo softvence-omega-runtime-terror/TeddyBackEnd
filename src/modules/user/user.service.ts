@@ -11,8 +11,6 @@ import updateGroupAndTransactions from './userUtill';
 import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
 
 const createUser = async (payload: Partial<TUser>) => {
-  console.log('here is the payload', payload);
-
 
   // Check for existing user
   const existingUser = await UserModel.findOne({ email: payload.email }).select(
@@ -44,7 +42,6 @@ const createUser = async (payload: Partial<TUser>) => {
 
   try {
     await session.startTransaction();
-    console.log('Transaction started');
 
     let imageUrl: string | undefined;
 
@@ -63,7 +60,6 @@ const createUser = async (payload: Partial<TUser>) => {
     console.log('User created:', user._id);
 
     // Find groups where the user's email exists in groupMemberList and isDeleted is false
-    console.log('Finding groups for email:', userData.email);
     const groups = await ExpenseOrIncomeGroupModel.find(
       {
         'groupMemberList.email': userData.email,
@@ -73,10 +69,8 @@ const createUser = async (payload: Partial<TUser>) => {
       { session },
     );
     const groupIds = groups.map((group) => group._id);
-    console.log('Found groups:', groupIds);
 
     // Create profile with groupList populated
-    console.log('Creating profile');
     const profileCreation = await ProfileModel.create(
       [
         {
@@ -87,11 +81,13 @@ const createUser = async (payload: Partial<TUser>) => {
           img:
             imageUrl ||
             'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
-          groupList: groupIds, // Add group IDs to profile
+          groupList: groupIds,
           aiChatCount: 100,
           maxGroups: 3,
           totalCreatedGroups: 0,
-          assistantType: 'Supportive_Friendly',
+          assistantType: null,
+          startDate: null,
+          endDate: null,
           emailNotification: false,
           isDeleted: false,
         },
@@ -99,10 +95,7 @@ const createUser = async (payload: Partial<TUser>) => {
       { session },
     );
 
-    console.log('Profile created:', profileCreation[0]._id);
-
     // Update group members and transactions with the new user ID
-    console.log('Updating group members and transactions');
     const updateResult = await updateGroupAndTransactions(
       userData.email!,
       user._id,
@@ -115,12 +108,16 @@ const createUser = async (payload: Partial<TUser>) => {
     console.log('Transaction committed');
 
     // Fetch the user after transaction
-    const fetchedUser = await UserModel.findOne({
+    let fetchedUser = await UserModel.findOne({
       email: userData.email,
     }).select('-password');
     if (!fetchedUser) {
       throw new Error('User created but not found after transaction.');
     }
+
+    const userObj = fetchedUser.toObject();
+    const profileObj = profileCreation[0]?.toObject();
+    const mergedUser = { ...userObj, ...profileObj };
 
     // Send OTP
     console.log('Sending OTP via email');
@@ -128,9 +125,7 @@ const createUser = async (payload: Partial<TUser>) => {
 
     return {
       success: true,
-      message:
-        'User created successfully, profile updated with groups, group/transactions updated, and OTP sent.',
-      user: fetchedUser.toObject(),
+      user: mergedUser,
       token: token.token || null,
       groupUpdate: {
         modifiedGroups: updateResult.modifiedGroups,
@@ -142,11 +137,11 @@ const createUser = async (payload: Partial<TUser>) => {
     await session.abortTransaction();
     console.error('Transaction failed:', error);
 
-  
+
 
     throw new Error(
       error.message ||
-        'User creation, profile update, or group/transaction update failed due to an internal error.',
+      'User creation, profile update, or group/transaction update failed due to an internal error.',
     );
   } finally {
     session.endSession();
@@ -237,7 +232,7 @@ const updateProfileData = async (
         $set: { isProfileUpdated: true },
       });
     }
-    
+
     return updatedProfile;
   } catch (error) {
     throw error;
