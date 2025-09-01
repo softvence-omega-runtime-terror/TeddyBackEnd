@@ -12,6 +12,7 @@ import { sendEmail } from '../../util/sendEmail';
 import { ProfileModel } from '../user/user.model';
 import config from '../../config';
 import generateTransactionCode from '../../util/transactionCodeGenarator';
+import { RecurringTransactionModel, TRecurringUnit } from './recurringTransaction.model';
 
 // ADDED: Helper function to check if a value is a valid ObjectId
 const isValidObjectId = (str: string | Types.ObjectId): boolean => {
@@ -932,6 +933,121 @@ const safeIdConverter = (id: string | Types.ObjectId): Types.ObjectId => {
 };
 
 const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
+  // Allow repeat creation pass-through: if payload.repeat provided, create schedule and also create first occurrence now
+  // repeat: { every: number, unit: 'minute'|'hour'|'day'|'week'|'month', endAt?: string, maxOccurrences?: number, startAt?: string }
+  const maybeRepeat = payload?.repeat;
+  if (maybeRepeat && typeof maybeRepeat === 'object') {
+    // Helpers to support presets
+    const parseTime = (t?: string) => {
+      const [hh, mm] = (t || '00:00').split(':').map((v) => parseInt(v, 10));
+      return { hh: isNaN(hh) ? 0 : hh, mm: isNaN(mm) ? 0 : mm };
+    };
+    const toUtcFromLocal = (y: number, m: number, d: number, hh: number, mm: number, tzOffsetMinutes?: number) => {
+      const local = new Date(y, m, d, hh, mm, 0, 0);
+      if (typeof tzOffsetMinutes === 'number') {
+        return new Date(local.getTime() - tzOffsetMinutes * 60 * 1000);
+      }
+      return new Date(Date.UTC(y, m, d, hh, mm, 0, 0));
+    };
+    const nextWeeklyAt = (weekday: number, time?: string, tzOffsetMinutes?: number) => {
+      const now = new Date();
+      const { hh, mm } = parseTime(time);
+      const candidateLocal = new Date(now);
+      candidateLocal.setHours(hh, mm, 0, 0);
+      let diff = (weekday - candidateLocal.getDay() + 7) % 7;
+      if (diff === 0 && candidateLocal <= now) diff = 7;
+      const targetLocal = new Date(candidateLocal);
+      targetLocal.setDate(candidateLocal.getDate() + diff);
+      return toUtcFromLocal(
+        targetLocal.getFullYear(),
+        targetLocal.getMonth(),
+        targetLocal.getDate(),
+        targetLocal.getHours(),
+        targetLocal.getMinutes(),
+        (maybeRepeat as any).tzOffsetMinutes,
+      );
+    };
+    const nextMonthlyAt = (dayOfMonth: number, time?: string, tzOffsetMinutes?: number) => {
+      const now = new Date();
+      const { hh, mm } = parseTime(time);
+      const dom = Math.max(1, Math.min(28, dayOfMonth));
+      let y = now.getFullYear();
+      let m = now.getMonth();
+      let candidate = toUtcFromLocal(y, m, dom, hh, mm, tzOffsetMinutes);
+      if (candidate <= now) {
+        m += 1; if (m > 11) { m = 0; y += 1; }
+        candidate = toUtcFromLocal(y, m, dom, hh, mm, tzOffsetMinutes);
+      }
+      return candidate;
+    };
+    const addUnit = (d: Date, count: number, u: TRecurringUnit) => {
+      const x = new Date(d);
+      if (u === 'minute') x.setMinutes(x.getMinutes() + count);
+      else if (u === 'hour') x.setHours(x.getHours() + count);
+      else if (u === 'day') x.setDate(x.getDate() + count);
+      else if (u === 'week') x.setDate(x.getDate() + 7 * count);
+      else if (u === 'month') x.setMonth(x.getMonth() + count);
+      return x;
+    };
+
+    let every: number = 1;
+    let unit: TRecurringUnit = 'day';
+    let startDate: Date = new Date();
+    const { endAt, maxOccurrences } = maybeRepeat as any;
+
+    if ('preset' in maybeRepeat) {
+      const preset = (maybeRepeat as any).preset as 'weekly' | 'monthly';
+      const time = (maybeRepeat as any).time as string | undefined;
+      const tzOffsetMinutes = (maybeRepeat as any).tzOffsetMinutes as number | undefined;
+      if (preset === 'weekly') {
+        const weekday = (maybeRepeat as any).weekday as number; // 0..6, 0=Sunday
+        if (typeof weekday !== 'number' || weekday < 0 || weekday > 6) {
+          throw new Error('repeat.weekday must be 0..6 for preset=weekly');
+        }
+        startDate = nextWeeklyAt(weekday, time, tzOffsetMinutes);
+        unit = 'week';
+        every = 1;
+      } else if (preset === 'monthly') {
+        const dayOfMonth = (maybeRepeat as any).dayOfMonth as number;
+        if (typeof dayOfMonth !== 'number' || dayOfMonth < 1 || dayOfMonth > 31) {
+          throw new Error('repeat.dayOfMonth must be 1..31 for preset=monthly');
+        }
+        startDate = nextMonthlyAt(dayOfMonth, time, tzOffsetMinutes);
+        unit = 'month';
+        every = 1;
+      } else {
+        throw new Error('repeat.preset must be weekly or monthly');
+      }
+    } else {
+      const direct = maybeRepeat as { every: number; unit: TRecurringUnit; startAt?: string };
+      if (!direct.every || !direct.unit) {
+        throw new Error('repeat.every and repeat.unit are required when setting up a repeating transaction');
+      }
+      if (!['minute', 'hour', 'day', 'week', 'month'].includes(direct.unit)) {
+        throw new Error('repeat.unit must be one of minute|hour|day|week|month');
+      }
+      every = direct.every;
+      unit = direct.unit;
+      startDate = direct.startAt ? new Date(direct.startAt) : new Date();
+    }
+
+    const nextRunAt = addUnit(startDate, every, unit);
+    await RecurringTransactionModel.create({
+      user_id,
+      basePayload: { ...payload, repeat: undefined },
+      every,
+      unit,
+      startAt: startDate,
+      nextRunAt,
+      endAt: endAt ? new Date(endAt) : null,
+      maxOccurrences: typeof maxOccurrences === 'number' ? maxOccurrences : null,
+      runCount: 0,
+      isActive: true,
+    });
+
+    const { repeat, ...cleanPayload } = payload;
+    payload = cleanPayload;
+  }
   if (!user_id) {
     throw new Error('User ID is required to add income or expenses');
   }
@@ -953,9 +1069,10 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     amount: payloadAmount,
   } = payload;
   let amount = payloadAmount || 0;
+  const effectiveDate = date || new Date().toISOString();
 
-  if (!transactionType || !currency || !date || !type_id) {
-    throw new Error('transactionType, currency, date, and type_id are required');
+  if (!transactionType || !currency || (!maybeRepeat && !date) || !type_id) {
+    throw new Error('transactionType, currency, and type_id are required; date is required unless repeat is provided');
   }
 
   if (transactionType === transactionTypeConst.income && !description) {
@@ -993,7 +1110,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
       transactionType,
       transaction_Code,
       currency,
-      date,
+      date: effectiveDate,
       amount,
       inDebt: false,
       borrowedOrLendAmount: 0,
@@ -1201,7 +1318,7 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
         transactionType,
         transaction_Code,
         currency,
-        date,
+        date: effectiveDate,
         amount: shareAmount,
         inDebt,
         borrowedOrLendAmount: Math.abs(borrowedOrLendAmount),
@@ -1722,11 +1839,11 @@ const getFilteredIncomeAndExpenses = async (
       'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
       'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
     };
-    
+
     if (monthMap[monthName] !== undefined && year) {
       const startDate = new Date(parseInt(year), monthMap[monthName], 1);
       const endDate = new Date(parseInt(year), monthMap[monthName] + 1, 0, 23, 59, 59);
-      
+
       query.date = {
         $gte: startDate.toISOString(),
         $lte: endDate.toISOString()
@@ -1750,7 +1867,7 @@ const getFilteredIncomeAndExpenses = async (
 
     // Extract matching type IDs
     const matchingTypeIds: Types.ObjectId[] = [];
-    
+
     expenseTypeMatches.forEach(doc => {
       doc.expenseTypeList.forEach((type: any) => {
         if (type.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
@@ -1828,7 +1945,7 @@ const getFilteredIncomeAndExpenses = async (
   const transactionsList = await Promise.all(
     filteredTransactions.map(async (t) => {
       let typeName = null;
-      
+
       // Get the type name for this transaction
       if (t.type_id) {
         if (t.transactionType === 'expense') {
@@ -1873,6 +1990,52 @@ const getFilteredIncomeAndExpenses = async (
     })
   );
 
+  // Group transactions by date (YYYY-MM-DD) and include day name
+  const groupsByDateMap: Record<string, {
+    date: string;
+    dayName: string;
+    transactions: typeof transactionsList;
+    totalIncome: number;
+    totalExpenses: number;
+    net: number;
+  }> = {} as any;
+
+  const getDayNameUTC = (yyyyMMdd: string) => {
+    try {
+      const d = new Date(`${yyyyMMdd}T00:00:00.000Z`);
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      return days[d.getUTCDay()] || '';
+    } catch {
+      return '';
+    }
+  };
+
+  (transactionsList || []).forEach((tx: any) => {
+    const key = (tx?.date ? new Date(tx.date).toISOString().slice(0, 10) : 'Unknown');
+    if (!groupsByDateMap[key]) {
+      groupsByDateMap[key] = {
+        date: key,
+        dayName: key !== 'Unknown' ? getDayNameUTC(key) : 'Unknown',
+        transactions: [],
+        totalIncome: 0,
+        totalExpenses: 0,
+        net: 0,
+      };
+    }
+    groupsByDateMap[key].transactions.push(tx);
+    if (tx.transactionType === 'income') {
+      groupsByDateMap[key].totalIncome += Number(tx.amount) || 0;
+    } else if (tx.transactionType === 'expense') {
+      groupsByDateMap[key].totalExpenses += Number(tx.amount) || 0;
+    }
+    groupsByDateMap[key].net = groupsByDateMap[key].totalIncome - groupsByDateMap[key].totalExpenses;
+  });
+
+  // Convert to sorted array based on date and requested sort order
+  const groupedByDate = Object.keys(groupsByDateMap)
+    .sort((a, b) => (sortOrder === -1 ? b.localeCompare(a) : a.localeCompare(b)))
+    .map((key) => groupsByDateMap[key]);
+
   // Get available months for filter dropdown
   const availableMonths = await TransactionModel.aggregate([
     { $match: { user_id } },
@@ -1894,7 +2057,8 @@ const getFilteredIncomeAndExpenses = async (
     totalIncome: Number(totalIncome) || 0,
     totalExpenses: Number(totalExpenses) || 0,
     remainingBalance: Number(remainingBalance) || 0,
-    transactionsList: transactionsList || [],
+    // transactionsList: transactionsList || [],
+    groupedByDate, // Date-wise grouped transactions with per-day totals
     availableMonths: formattedMonths,
     appliedFilters: filters,
     totalCount: transactionsList.length
@@ -1933,7 +2097,7 @@ const getMonthlyAnalytics = async (
 ) => {
   const currentYear = year || new Date().getFullYear();
   const currentMonth = month || new Date().toLocaleDateString('en-US', { month: 'short' });
-  
+
   // Month mapping
   const monthMap: { [key: string]: number } = {
     'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
@@ -2030,7 +2194,7 @@ const getYearlyAnalytics = async (
   year?: number
 ) => {
   const currentYear = year || new Date().getFullYear();
-  
+
   // Get data for entire year
   const startDate = new Date(currentYear, 0, 1);
   const endDate = new Date(currentYear, 11, 31, 23, 59, 59);
@@ -2084,7 +2248,7 @@ const getYearlyAnalytics = async (
     const monthIncome = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'income')?.total || 0;
     const monthExpenses = monthlyData.find(d => d._id.month === i + 1 && d._id.transactionType === 'expense')?.total || 0;
     const monthSaving = monthIncome - monthExpenses;
-    
+
     yearlyTotalIncome += monthIncome;
     yearlyTotalExpenses += monthExpenses;
 
@@ -2118,7 +2282,7 @@ const getYearlyAnalytics = async (
 
   // Get category breakdown for the entire year
   const allYearTransactions = await TransactionModel.find(baseQuery).lean();
-  
+
   // Get expense category breakdown
   const expenseTransactions = allYearTransactions.filter(t => t.transactionType === 'expense');
   const expenseCategoryBreakdown = await getCategoryBreakdown(user_id, expenseTransactions, yearlyTotalExpenses, 'expense');
@@ -2153,8 +2317,8 @@ const getYearlyAnalytics = async (
 
 // Helper: Get Category Breakdown
 const getCategoryBreakdown = async (
-  user_id: Types.ObjectId, 
-  transactions: any[], 
+  user_id: Types.ObjectId,
+  transactions: any[],
   totalAmount: number,
   transactionType: 'expense' | 'income'
 ) => {
@@ -2181,14 +2345,14 @@ const getCategoryBreakdown = async (
   const categoryBreakdown = await Promise.all(
     Object.values(typeGroups).map(async (group: any) => {
       let typeName = 'Unknown';
-      
+
       // Find the type name based on transaction type
       if (transactionType === 'expense') {
         const expenseType = await ExpenseTypesModel.findOne({
           user_id: { $in: [user_id, null] },
           'expenseTypeList._id': group.typeId
         }).lean();
-        
+
         if (expenseType) {
           const type = expenseType.expenseTypeList.find(
             (t: any) => t._id.toString() === group.typeId
@@ -2200,7 +2364,7 @@ const getCategoryBreakdown = async (
           user_id: { $in: [user_id, null] },
           'incomeTypeList._id': group.typeId
         }).lean();
-        
+
         if (incomeType) {
           const type = incomeType.incomeTypeList.find(
             (t: any) => t._id.toString() === group.typeId
@@ -2238,7 +2402,7 @@ const getIndividualTypeSummary = async (
   // Group transactions by type_id first, then we'll merge by typeName
   const typeGroups = transactions.reduce((acc, transaction) => {
     const typeId = transaction.type_id.toString();
-    
+
     if (!acc[typeId]) {
       acc[typeId] = {
         typeId,
@@ -2248,13 +2412,13 @@ const getIndividualTypeSummary = async (
         transactionCount: 0
       };
     }
-    
+
     if (transaction.transactionType === 'income') {
       acc[typeId].totalIncome += transaction.amount;
     } else {
       acc[typeId].totalExpenses += transaction.amount;
     }
-    
+
     acc[typeId].transactionCount += 1;
     return acc;
   }, {});
@@ -2263,13 +2427,13 @@ const getIndividualTypeSummary = async (
   const typeWithNames = await Promise.all(
     Object.values(typeGroups).map(async (group: any) => {
       let typeName = 'Unknown';
-      
+
       // Find the type name - check both income and expense types
       const expenseType = await ExpenseTypesModel.findOne({
         user_id: { $in: [user_id, null] },
         'expenseTypeList._id': group.typeId
       }).lean();
-      
+
       if (expenseType) {
         const type = expenseType.expenseTypeList.find(
           (t: any) => t._id.toString() === group.typeId
@@ -2280,7 +2444,7 @@ const getIndividualTypeSummary = async (
           user_id: { $in: [user_id, null] },
           'incomeTypeList._id': group.typeId
         }).lean();
-        
+
         if (incomeType) {
           const type = incomeType.incomeTypeList.find(
             (t: any) => t._id.toString() === group.typeId
@@ -2298,7 +2462,7 @@ const getIndividualTypeSummary = async (
 
   // Now group by typeName and merge data from different typeIds with same name
   const typesSummaryObject: { [key: string]: any } = {};
-  
+
   typeWithNames.forEach((group) => {
     if (!typesSummaryObject[group.typeName]) {
       typesSummaryObject[group.typeName] = {
@@ -2312,7 +2476,7 @@ const getIndividualTypeSummary = async (
         }
       };
     }
-    
+
     // Add income and expenses to the existing type
     typesSummaryObject[group.typeName].Income += group.totalIncome;
     typesSummaryObject[group.typeName].Expenses += group.totalExpenses;
@@ -2321,16 +2485,16 @@ const getIndividualTypeSummary = async (
   // Calculate final values for each type
   Object.keys(typesSummaryObject).forEach((typeName) => {
     const typeData = typesSummaryObject[typeName];
-    
+
     // Calculate saving amount
     typeData.savingAmount = typeData.Income - typeData.Expenses;
-    
+
     // Calculate percentages
     const typeTotal = typeData.Income + typeData.Expenses;
     typeData.percentages.income = typeTotal > 0 ? Math.round((typeData.Income / typeTotal) * 100) : 0;
     typeData.percentages.expense = typeTotal > 0 ? Math.round((typeData.Expenses / typeTotal) * 100) : 0;
     typeData.percentages.saving = typeData.Income > 0 ? Math.round((typeData.savingAmount / typeData.Income) * 100) : 0;
-    
+
     // Ensure numbers are properly formatted
     typeData.Income = Number(typeData.Income) || 0;
     typeData.Expenses = Number(typeData.Expenses) || 0;
