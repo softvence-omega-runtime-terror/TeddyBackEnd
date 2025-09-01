@@ -4,6 +4,7 @@ import { Server } from "http";
 import config from "./config";
 import adminSeeder from "./seeder/adminSeeder";
 import { setupWebSocket } from './util/webSocket';
+import { startRecurringScheduler } from './util/recurringScheduler';
 
 let server: Server;
 
@@ -19,6 +20,9 @@ async function main() {
     // Setup WebSocket after server is ready
     const wss = setupWebSocket(server, config.jwt_token_secret);
     app.set('wss', wss);
+
+  // Start recurring scheduler
+  startRecurringScheduler();
   } 
   catch (err : any) {
     throw Error('something went wrong in server or mongoose connection');

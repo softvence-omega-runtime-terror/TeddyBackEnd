@@ -219,10 +219,10 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
   console.log("here is the payklods", payload)
 
   // Validate payload for required fields
-  const { transactionType, currency, date, type_id, isGroupTransaction, group_id, slice_type, isRedistribute } = payload;
+  const { transactionType, currency, date, type_id, isGroupTransaction, group_id, slice_type, isRedistribute, repeat } = payload;
 
-  if (!transactionType || !currency || !date || !type_id) {
-    throw new Error('transactionType, currency, date, and type_id are required');
+  if (!transactionType || !currency || (!repeat && !date) || !type_id) {
+    throw new Error('transactionType, currency, and type_id are required; date is required unless repeat is provided');
   }
 
   if (isGroupTransaction && (!group_id || !slice_type)) {

@@ -1,0 +1,74 @@
+{
+  "endpoint": "/incomeAndExpences/addIncomeOrExpenses",
+  "auth": "Bearer <JWT>",
+  "headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer <JWT>"
+  },
+  "weekdayMap": {"Sunday":0, "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6},
+  "notes": [
+    "For recurring, first item is created immediately; future runs happen weekly.",
+    "time defaults to 00:00 if omitted; tzOffsetMinutes omitted => time treated as UTC."
+  ],
+  "examples": {
+    "oneTimePersonalIncome": {
+      "requestBody": {
+        "transactionType": "income",
+        "currency": "USDT",
+        "date": "2025-09-07T09:00:00.000Z",
+        "amount": 5000,
+        "description": "Salary",
+        "type_id": "68b3d2244555ad35a5340242"
+      }
+    },
+    "weeklySundayIncomeDhaka": {
+      "description": "Every Sunday 09:00 Asia/Dhaka (UTC+6)",
+      "requestBody": {
+        "transactionType": "income",
+        "currency": "USDT",
+        "amount": 100,
+        "description": "Weekly Sunday income",
+        "type_id": "68b3d2244555ad35a5340242",
+        "repeat": {
+          "preset": "weekly",
+          "weekday": 0,
+          "time": "09:00",
+          "tzOffsetMinutes": 360
+        }
+      }
+    },
+    "weeklyMondayExpenseUTC": {
+      "description": "Every Monday 20:30 UTC",
+      "requestBody": {
+        "transactionType": "expense",
+        "currency": "USDT",
+        "amount": 50,
+        "type_id": "68b3d2244555ad35a5340242",
+        "repeat": {
+          "preset": "weekly",
+          "weekday": 1,
+          "time": "20:30"
+        }
+      }
+    },
+    "weeklySaturdayGroupExpenseDhakaEqual": {
+      "description": "Every Saturday 14:00 Asia/Dhaka, group equal split among all",
+      "requestBody": {
+        "transactionType": "expense",
+        "currency": "USDT",
+        "amount": 250,
+        "type_id": "68b3d2244555ad35a5340242",
+        "isGroupTransaction": true,
+        "group_id": "<groupId>",
+        "shareWith": "all",
+        "slice_type": "equal",
+        "repeat": {
+          "preset": "weekly",
+          "weekday": 6,
+          "time": "14:00",
+          "tzOffsetMinutes": 360
+        }
+      }
+    }
+  }
+}
