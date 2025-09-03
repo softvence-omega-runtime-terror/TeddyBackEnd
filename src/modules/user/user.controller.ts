@@ -3,6 +3,257 @@ import catchAsync from '../../util/catchAsync';
 import globalResponseHandler from '../../util/globalResponseHandler';
 import idConverter from '../../util/idConverter';
 import userServices from './user.service';
+import { sendEmail } from '../../util/sendEmail';
+
+// Friend Management Controllers
+const addFriend = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const requestBody = req.body;
+
+  // Check if it's a single friend or multiple friends
+  const isMultiple = Array.isArray(requestBody.friends) || Array.isArray(requestBody);
+
+  let result;
+  let emailsToSend: string[] = [];
+
+  if (isMultiple) {
+    // Handle multiple friends
+    const friendsData = Array.isArray(requestBody) ? requestBody : requestBody.friends;
+    result = await userServices.addMultipleFriends(user_id, friendsData);
+
+    // Collect emails of successfully added friends
+    emailsToSend = result.details.success.map((friend: any) => friend.email);
+  } else {
+    // Handle single friend
+    const friendData = requestBody;
+    result = await userServices.addFriend(user_id, friendData);
+
+    if (result && friendData.email) {
+      emailsToSend = [friendData.email];
+    }
+  }
+
+  // Send emails to successfully added friends
+  if (emailsToSend.length > 0) {
+    // Get user's profile to get their name for the email
+    const senderProfile = await userServices.getProfile(user_id);
+    const senderName = senderProfile?.name || 'Someone';
+
+    const emailHTML = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Friend Request</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+          }
+          .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+          }
+          .content {
+            padding: 40px 30px;
+          }
+          .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+          }
+          .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.8;
+          }
+          .friend-info {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin: 20px 0;
+          }
+          .friend-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+          }
+          .friend-email {
+            color: #7f8c8d;
+            font-size: 14px;
+          }
+          .cta-section {
+            text-align: center;
+            margin: 30px 0;
+          }
+          .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+          }
+          .cta-button:hover {
+            transform: translateY(-2px);
+          }
+          .footer {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+          }
+          .footer a {
+            color: #3498db;
+            text-decoration: none;
+          }
+          .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="icon">👥</div>
+            <h1>New Friend Request!</h1>
+          </div>
+          
+          <div class="content">
+            <div class="greeting">Hello there! 👋</div>
+            
+            <div class="message">
+              You've received a new friend request! Someone would like to connect with you.
+            </div>
+            
+            <div class="friend-info">
+              <div class="friend-name">${senderName}</div>
+              <div class="friend-email">${req.user.email || 'via App'}</div>
+            </div>
+            
+            <div class="message">
+              ${senderName} would like to add you as a friend. You can connect to share expenses, 
+              split bills, and keep track of your shared financial activities together.
+            </div>
+            
+            <div class="cta-section">
+              <a href="#" class="cta-button">
+                🚀 Open App to Respond
+              </a>
+            </div>
+            
+            <div class="message" style="font-size: 14px; color: #7f8c8d; text-align: center;">
+              This friend request was sent through our expense tracking app. 
+              If you don't have the app yet, download it to manage your finances together!
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>Best regards,<br>The Expense Tracker Team</p>
+            <p>
+              <a href="#">Download App</a> | 
+              <a href="#">Support</a> | 
+              <a href="#">Privacy Policy</a>
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Send emails to all successfully added friends
+    const emailPromises = emailsToSend.map(email =>
+      sendEmail(
+        email,
+        '👥 New Friend Request - Join & Split Expenses Together!',
+        emailHTML
+      )
+    );
+
+    try {
+      await Promise.all(emailPromises);
+    } catch (emailError) {
+      console.error('Failed to send some friend request emails:', emailError);
+      // Don't fail the entire request if emails fail
+    }
+  }
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: result.message,
+    data: isMultiple ? result : (result as any).friend,
+  });
+});
+
+const getFriends = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+
+  const result = await userServices.getFriends(user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Friends retrieved successfully',
+    data: result,
+  });
+});
+
+const deleteFriend = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const { friendEmail } = req.params;
+
+  const result = await userServices.deleteFriend(user_id, friendEmail);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: result.message,
+    data: null,
+  });
+});
+
+const updateFriend = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const { friendEmail } = req.params;
+  const updateData = req.body;
+
+  const result = await userServices.updateFriend(user_id, friendEmail, updateData);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: result.message,
+    data: null,
+  });
+});
 
 const createUser = catchAsync(async (req, res): Promise<void> => {
   console.log("Request Body:", req.body); // Debugging line to check the request body
@@ -236,7 +487,118 @@ const unblockUserController = catchAsync(async (req, res) => {
   });
 });
 
+
+// Category Management
+
+const createCategoryPersonal = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.createCategoryPersonal(converted_user_id, req.body);
+
+  globalResponseHandler(res, {
+    statusCode: 201,
+    success: true,
+    message: 'Category created successfully',
+    data: result,
+  });
+});
+
+const createCategoryGroup = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.createCategoryGroup(converted_user_id, req.body);
+
+  globalResponseHandler(res, {
+    statusCode: 201,
+    success: true,
+    message: 'Category created successfully',
+    data: result,
+  });
+});
+
+const getAllCategories = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.getAllCategories(converted_user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Categories retrieved successfully',
+    data: result,
+  });
+});
+
+const getAllCategoriesForPersonal = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.getAllCategoriesForPersonal(converted_user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Categories retrieved successfully',
+    data: result,
+  });
+});
+
+const getAllCategoriesForGroup = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.getAllCategoriesForGroup(converted_user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Categories retrieved successfully',
+    data: result,
+  });
+});
+
+const deleteCategory = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const category_id = req.params.id;
+  const result = await userServices.deleteCategory(converted_user_id, category_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Category deleted successfully',
+    data: result,
+  });
+});
+
+
 const userController = {
+  addFriend,
+  getFriends,
+  deleteFriend,
+  createCategoryPersonal,
+  createCategoryGroup,
+  getAllCategories,
+  getAllCategoriesForPersonal,
+  getAllCategoriesForGroup,
+  deleteCategory,
+  updateFriend,
   createUser,
   getAllUsers,
   updateProfileData,

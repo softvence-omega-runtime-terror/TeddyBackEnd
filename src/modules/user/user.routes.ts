@@ -25,6 +25,7 @@ userRoutes.patch(
   userController.updateProfileData,
 );
 
+
 userRoutes.delete(
   '/selfDestruct',
   auth([userRole.user]),
@@ -85,5 +86,74 @@ userRoutes.put('/block/:id', auth([userRole.admin]), userController.blockUserCon
 
 // Unblock user
 userRoutes.put('/unblock/:id', auth([userRole.admin]), userController.unblockUserController);
+
+// Friend Management Routes
+userRoutes.post(
+  '/friends/add',
+  auth([userRole.user]),
+  userController.addFriend,
+);
+
+userRoutes.post(
+  '/friends/add-multiple',
+  auth([userRole.user]),
+  userController.addFriend,
+);
+
+userRoutes.get(
+  '/friends',
+  auth([userRole.user]),
+  userController.getFriends,
+);
+
+userRoutes.delete(
+  '/friends/:friendEmail',
+  auth([userRole.user]),
+  userController.deleteFriend,
+);
+
+userRoutes.patch(
+  '/friends/:friendEmail',
+  auth([userRole.user]),
+  userController.updateFriend,
+);
+
+
+// Category Management Routes
+userRoutes.post(
+  '/categories/personal',
+  auth([userRole.user]),
+  userController.createCategoryPersonal,
+);
+
+userRoutes.post(
+  '/categories/group',
+  auth([userRole.user]),
+  userController.createCategoryGroup,
+);
+
+userRoutes.get(
+  '/categories',
+  auth([userRole.user]),
+  userController.getAllCategories,
+);
+
+userRoutes.get(
+  '/categories/personal',
+  auth([userRole.user]),
+  userController.getAllCategoriesForPersonal,
+);
+
+userRoutes.get(
+  '/categories/group',
+  auth([userRole.user]),
+  userController.getAllCategoriesForGroup,
+);
+
+userRoutes.delete(
+  '/categories/:id',
+  auth([userRole.user]),
+  userController.deleteCategory,
+);
 
 export default userRoutes;
