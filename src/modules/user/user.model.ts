@@ -1,6 +1,5 @@
-import bcrypt from 'bcrypt';
 import mongoose, { Schema } from 'mongoose';
-import { TProfile, TUser } from './user.interface';
+import { TCategory, TProfile, TUser } from './user.interface';
 import { userRole } from '../../constants';
 
 const UserSchema = new Schema<TUser>(
@@ -37,6 +36,18 @@ const ProfileSchema = new Schema<TProfile>(
       required: false,
       default: 'https://res.cloudinary.com/dpgcpei5u/image/upload/v1747546759/interviewProfile_jvo9jl.jpg',
     },
+    friends: [{
+      name: { type: String, required: false },
+      email: { type: String, required: true },
+      user_id: { type: Schema.Types.ObjectId, ref: 'UserCollection', required: false }, // Only if friend is app user
+      isAppUser: { type: Boolean, default: false },
+      status: {
+        type: String,
+        enum: ['pending', 'accepted', 'blocked'],
+        default: 'accepted'
+      },
+
+    }],
     monthStart: { type: Date, required: false },
     monthEnd: { type: Date, required: false },
     aiChatCount: { type: Number, required: false, default: 100 },
@@ -57,15 +68,20 @@ const ProfileSchema = new Schema<TProfile>(
     endDate: { type: Date, required: false },
     plan_id: { type: Schema.Types.ObjectId, required: false, ref: 'Plan' },
     planPurchaseDate: { type: Date, required: false },
-
     emailNotification: { type: Boolean, required: true, default: false },
     notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
     chatList_id: { type: Schema.Types.ObjectId, required: false, ref: 'ChatCollectionList' },
     isDeleted: { type: Boolean, required: false, default: false },
-  },
-  { timestamps: true }
+  }
 );
 
 
+const CategorySchema = new Schema<TCategory>({
+  name: { type: String, required: true },
+  type: { type: String, enum: ['personal', 'group'] },
+  user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' }
+});
+
 export const UserModel = mongoose.model('UserCollection', UserSchema);
 export const ProfileModel = mongoose.model('Profile', ProfileSchema);
+export const CategoryModel = mongoose.model('Category', CategorySchema);

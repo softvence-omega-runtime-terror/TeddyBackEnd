@@ -1,8 +1,7 @@
 import mongoose, { ClientSession, Types } from 'mongoose';
-import { TProfile, TUser } from './user.interface';
-import { ProfileModel, UserModel } from './user.model';
+import { TProfile, TUser, TFriend, TCategory } from './user.interface';
+import { CategoryModel, ProfileModel, UserModel } from './user.model';
 import {
-  deleteFile,
   uploadImgToCloudinary,
 } from '../../util/uploadImgToCloudinary';
 import authUtil from '../auth/auth.util';
@@ -400,6 +399,252 @@ const unblockUser = async (userId: string) => {
   return user;
 };
 
+// Friend Management Services
+const addFriend = async (userId: Types.ObjectId, friendData: Partial<TFriend>) => {
+  const profile = await ProfileModel.findOne({ user_id: userId });
+  if (!profile) {
+    throw new Error('Profile not found');
+  }
+
+  // Check if friend already exists
+  const existingFriend = profile.friends?.find(f => f.email === friendData.email);
+  if (existingFriend) {
+    throw new Error('Friend already exists');
+  }
+
+  // Check if friend is an app user
+  const appUser = await UserModel.findOne({ email: friendData.email });
+  const newFriend: Partial<TFriend> = {
+    ...friendData,
+    isAppUser: !!appUser,
+    user_id: appUser?._id,
+    status: 'accepted'
+  };
+
+  await ProfileModel.findByIdAndUpdate(profile._id, {
+    $push: { friends: newFriend }
+  });
+
+  return { message: 'Friend added successfully', friend: newFriend };
+};
+
+// Add Multiple Friends Service
+const addMultipleFriends = async (userId: Types.ObjectId, friendsData: Partial<TFriend>[]) => {
+  const profile = await ProfileModel.findOne({ user_id: userId });
+  if (!profile) {
+    throw new Error('Profile not found');
+  }
+
+  const results: {
+    success: Array<{ email: string; name: string; isAppUser: boolean }>;
+    failed: Array<{ email: string; name: string; reason: string }>;
+    alreadyExists: Array<{ email: string; name: string; reason: string }>;
+  } = {
+    success: [],
+    failed: [],
+    alreadyExists: []
+  };
+
+  for (const friendData of friendsData) {
+    try {
+      const friend = friendData as any; // Allow flexible field names
+
+      if (!friend.email) {
+        results.failed.push({
+          email: friend.email || 'unknown',
+          name: friend.name || friend.username || 'unknown',
+          reason: 'Email is required'
+        });
+        continue;
+      }
+
+      // Use name, username, or email as display name
+      const displayName = friend.name || friend.username || friend.email.split('@')[0];
+
+      // Check if friend already exists
+      const existingFriend = profile.friends?.find(f => f.email === friend.email);
+      if (existingFriend) {
+        results.alreadyExists.push({
+          email: friend.email,
+          name: displayName,
+          reason: 'Friend already exists'
+        });
+        continue;
+      }
+
+      // Check if friend is an app user
+      const appUser = await UserModel.findOne({ email: friend.email });
+      const newFriend: Partial<TFriend> = {
+        name: displayName, // Ensure name is set
+        email: friend.email,
+        nickname: friend.nickname,
+        tags: friend.tags,
+        phone: friend.phone,
+        profileImage: friend.profileImage,
+        notes: friend.notes,
+        socialLinks: friend.socialLinks,
+        isAppUser: !!appUser,
+        user_id: appUser?._id,
+        status: 'accepted'
+      };
+
+      // Add friend to profile
+      await ProfileModel.findByIdAndUpdate(profile._id, {
+        $push: { friends: newFriend }
+      });
+
+      results.success.push({
+        email: friend.email,
+        name: displayName,
+        isAppUser: !!appUser
+      });
+
+    } catch (error: any) {
+      const friend = friendData as any;
+      results.failed.push({
+        email: friend.email || 'unknown',
+        name: friend.name || friend.username || 'unknown',
+        reason: error.message || 'Unknown error'
+      });
+    }
+  }
+
+  return {
+    message: `Added ${results.success.length} friends successfully`,
+    summary: {
+      total: friendsData.length,
+      successful: results.success.length,
+      failed: results.failed.length,
+      alreadyExists: results.alreadyExists.length
+    },
+    details: results
+  };
+};
+
+const getFriends = async (userId: Types.ObjectId) => {
+  const profile = await ProfileModel.findOne({ user_id: userId })
+    .populate('friends.user_id', 'name email img')
+    .lean();
+
+  if (!profile) {
+    throw new Error('Profile not found');
+  }
+
+  return profile.friends || [];
+};
+
+const deleteFriend = async (userId: Types.ObjectId, friendEmail: string) => {
+  const profile = await ProfileModel.findOne({ user_id: userId });
+  if (!profile) {
+    throw new Error('Profile not found');
+  }
+
+  const friendIndex = profile.friends?.findIndex(f => f.email === friendEmail);
+  if (friendIndex === -1 || friendIndex === undefined) {
+    throw new Error('Friend not found');
+  }
+
+  await ProfileModel.findByIdAndUpdate(profile._id, {
+    $pull: { friends: { email: friendEmail } }
+  });
+
+  return { message: 'Friend deleted successfully' };
+};
+
+const updateFriend = async (userId: Types.ObjectId, friendEmail: string, updateData: Partial<TFriend>) => {
+  const profile = await ProfileModel.findOne({ user_id: userId });
+  if (!profile) {
+    throw new Error('Profile not found');
+  }
+
+  const friendIndex = profile.friends?.findIndex(f => f.email === friendEmail);
+  if (friendIndex === -1 || friendIndex === undefined) {
+    throw new Error('Friend not found');
+  }
+
+  // Update specific friend fields
+  const updateFields: any = {};
+  Object.keys(updateData).forEach(key => {
+    if (updateData[key as keyof TFriend] !== undefined) {
+      updateFields[`friends.${friendIndex}.${key}`] = updateData[key as keyof TFriend];
+    }
+  });
+
+  await ProfileModel.findByIdAndUpdate(profile._id, {
+    $set: updateFields
+  });
+
+  return { message: 'Friend updated successfully' };
+};
+
+// Category Management Services
+const createCategoryPersonal = async (userId: Types.ObjectId, categoryData: TCategory) => {
+  try {
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'personal' });
+    if (isExist) {
+      throw new Error('Category already exists');
+    }
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'personal' });
+    await newCategory.save();
+    return { message: 'Personal category created successfully', category: newCategory };
+  } catch (error) {
+    throw new Error('Error creating personal category: ' + (error as any).message);
+  }
+};
+
+const createCategoryGroup = async (userId: Types.ObjectId, categoryData: TCategory) => {
+  try {
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'group' });
+    if (isExist) {
+      throw new Error('Category already exists');
+    }
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'group' });
+    await newCategory.save();
+    return { message: 'Group category created successfully', category: newCategory };
+  } catch (error) {
+    throw new Error('Error creating group category: ' + (error as any).message);
+  }
+};
+
+const getAllCategories = async (userId: Types.ObjectId) => {
+  try {
+    const categories = await CategoryModel.find({ user_id: userId });
+    return categories;
+  } catch (error) {
+    throw new Error('Error retrieving categories: ' + (error as any).message);
+  }
+};
+
+const getAllCategoriesForPersonal = async (userId: Types.ObjectId) => {
+  try {
+    const categories = await CategoryModel.find({ user_id: userId, type: 'personal' });
+    return categories;
+  } catch (error) {
+    throw new Error('Error retrieving personal categories: ' + (error as any).message);
+  }
+};
+
+const getAllCategoriesForGroup = async (userId: Types.ObjectId) => {
+  try {
+    const categories = await CategoryModel.find({ user_id: userId, type: 'group' });
+    return categories;
+  } catch (error) {
+    throw new Error('Error retrieving group categories: ' + (error as any).message);
+  }
+};
+
+const deleteCategory = async (userId: Types.ObjectId, categoryId: Types.ObjectId) => {
+  try {
+    const result = await CategoryModel.findOneAndDelete({ _id: categoryId, user_id: userId });
+    if (!result) {
+      throw new Error('Category not found');
+    }
+    return { message: 'Category deleted successfully' };
+  } catch (error) {
+    throw new Error('Error deleting category: ' + (error as any).message);
+  }
+};
+
 const userServices = {
   createUser,
   getAllUsers,
@@ -415,6 +660,20 @@ const userServices = {
   setFCMToken,
   blockUser,
   unblockUser,
+  // Friend management services
+  addFriend,
+  addMultipleFriends,
+  getFriends,
+  deleteFriend,
+  updateFriend,
+
+  // Category Management Services
+  createCategoryPersonal,
+  createCategoryGroup,
+  getAllCategories,
+  getAllCategoriesForPersonal,
+  getAllCategoriesForGroup,
+  deleteCategory
 };
 
 export default userServices;
