@@ -577,7 +577,11 @@ const deleteCategory = catchAsync(async (req, res) => {
     throw Error('id conversation failed');
   }
   const category_id = req.params.id;
-  const result = await userServices.deleteCategory(converted_user_id, category_id);
+  const converted_category_id = idConverter(category_id);
+  if (!converted_category_id) {
+    throw Error('category id conversion failed');
+  }
+  const result = await userServices.deleteCategory(converted_user_id, converted_category_id);
 
   globalResponseHandler(res, {
     statusCode: 200,
