@@ -216,13 +216,13 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
   const user_id = idConverter(userId as string) as Types.ObjectId;
 
   const payload = req.body;
-  console.log("here is the payklods", payload)
+  console.log("here is the payload", payload);
 
-  // Validate payload for required fields
-  const { transactionType, currency, date, type_id, isGroupTransaction, group_id, slice_type, isRedistribute, repeat } = payload;
+  // Validate payload for required fields (currency will be fetched from user profile)
+  const { transactionType, date, type_id, isGroupTransaction, group_id, slice_type, isRedistribute, repeat } = payload;
 
-  if (!transactionType || !currency || (!repeat && !date) || !type_id) {
-    throw new Error('transactionType, currency, and type_id are required; date is required unless repeat is provided');
+  if (!transactionType || (!repeat && !date) || !type_id) {
+    throw new Error('transactionType, type_id are required; date is required unless repeat is provided');
   }
 
   if (isGroupTransaction && (!group_id || !slice_type)) {

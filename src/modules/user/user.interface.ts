@@ -70,6 +70,7 @@ export type TProfile = {
   emailNotification: boolean;
   user_id: Types.ObjectId;
   notificationList_id?: Types.ObjectId; // Optional to align with schema
+  preferredCurrency?: 'USD' | 'EUR' | 'SGD' | 'GBP' | 'AUD';
   isDeleted?: boolean;
 };
 

@@ -191,7 +191,7 @@ const transactionSchema = new Schema<TransactionDocument>(
     },
     type_id: {
       type: Schema.Types.ObjectId,
-      refPath: 'typeModel',
+      refPath: 'Category',
       required: true,
     },
     user_id: {

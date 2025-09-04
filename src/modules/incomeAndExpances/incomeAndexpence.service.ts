@@ -9,10 +9,11 @@ import {
 import { uploadImgToCloudinary } from '../../util/uploadImgToCludinary';
 import { transactionTypeConst } from '../../constants';
 import { sendEmail } from '../../util/sendEmail';
-import { ProfileModel } from '../user/user.model';
+import { CategoryModel, ProfileModel } from '../user/user.model';
 import config from '../../config';
 import generateTransactionCode from '../../util/transactionCodeGenarator';
 import { RecurringTransactionModel, TRecurringUnit } from './recurringTransaction.model';
+import { convertCurrency, convertCurrencyBatch, TCurrency } from '../../util/currencyConverter';
 
 // ADDED: Helper function to check if a value is a valid ObjectId
 const isValidObjectId = (str: string | Types.ObjectId): boolean => {
@@ -1052,9 +1053,13 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     throw new Error('User ID is required to add income or expenses');
   }
 
+  // Fetch user profile to get preferred currency
+  const userProfile = await ProfileModel.findOne({ user_id, isDeleted: false }).lean();
+  const userCurrency: TCurrency = (userProfile?.preferredCurrency as TCurrency) || 'USD';
+
   const {
     transactionType,
-    currency,
+    currency: payloadCurrency, // This might be undefined, we'll use userCurrency
     date,
     description,
     type_id,
@@ -1068,11 +1073,15 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     contribution_list,
     amount: payloadAmount,
   } = payload;
+  
+  // Use user's preferred currency if not provided in payload
+  const currency = payloadCurrency || userCurrency;
+  
   let amount = payloadAmount || 0;
   const effectiveDate = date || new Date().toISOString();
 
-  if (!transactionType || !currency || (!maybeRepeat && !date) || !type_id) {
-    throw new Error('transactionType, currency, and type_id are required; date is required unless repeat is provided');
+  if (!transactionType || (!maybeRepeat && !date) || !type_id) {
+    throw new Error('transactionType and type_id are required; date is required unless repeat is provided');
   }
 
   if (transactionType === transactionTypeConst.income && !description) {
@@ -1081,14 +1090,14 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
 
   let isTypeExist;
   if (transactionType === transactionTypeConst.expense) {
-    isTypeExist = await ExpenseTypesModel.findOne({
+    isTypeExist = await CategoryModel.findOne({
       user_id: { $in: [user_id, null] },
-      'expenseTypeList._id': safeIdConverter(type_id),
+      '_id': safeIdConverter(type_id),
     });
   } else {
-    isTypeExist = await IncomeTypesModel.findOne({
+    isTypeExist = await CategoryModel.findOne({
       user_id: { $in: [user_id, null] },
-      'incomeTypeList._id': safeIdConverter(type_id),
+      '_id': safeIdConverter(type_id),
     });
   }
   if (!isTypeExist) {
@@ -1793,6 +1802,10 @@ const getFilteredIncomeAndExpenses = async (
     throw new Error('User ID is required to fetch income and expenses');
   }
 
+  // Fetch user profile to get preferred currency
+  const userProfile = await ProfileModel.findOne({ user_id, isDeleted: false }).lean();
+  const userPreferredCurrency: TCurrency = (userProfile?.preferredCurrency as TCurrency) || 'USD';
+
   // Build the base query
   const query: any = { user_id };
 
@@ -1854,35 +1867,20 @@ const getFilteredIncomeAndExpenses = async (
   // Add search text filter for description and type names
   if (filters?.searchText) {
     // First, get all type IDs that match the search text
-    const [expenseTypeMatches, incomeTypeMatches] = await Promise.all([
-      ExpenseTypesModel.find({
+    const matchData = await CategoryModel.find({
         user_id: { $in: [user_id, null] },
-        'expenseTypeList.name': { $regex: filters.searchText, $options: 'i' }
-      }).lean(),
-      IncomeTypesModel.find({
-        user_id: { $in: [user_id, null] },
-        'incomeTypeList.name': { $regex: filters.searchText, $options: 'i' }
-      }).lean()
-    ]);
+        'name': { $regex: filters.searchText, $options: 'i' }
+      }).lean();
 
     // Extract matching type IDs
     const matchingTypeIds: Types.ObjectId[] = [];
 
-    expenseTypeMatches.forEach(doc => {
-      doc.expenseTypeList.forEach((type: any) => {
-        if (type.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
-          matchingTypeIds.push(type._id);
-        }
-      });
+    matchData.forEach(doc => {
+      if (doc.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
+        matchingTypeIds.push(doc._id);
+      }
     });
 
-    incomeTypeMatches.forEach(doc => {
-      doc.incomeTypeList.forEach((type: any) => {
-        if (type.name.toLowerCase().includes(filters.searchText!.toLowerCase())) {
-          matchingTypeIds.push(type._id);
-        }
-      });
-    });
 
     // Add search conditions for both description and type IDs
     query.$and = query.$and || [];
@@ -1912,14 +1910,28 @@ const getFilteredIncomeAndExpenses = async (
     .sort(sortOptions)
     .lean();
 
-  // Calculate totals
-  const totalIncome = transactions
-    .filter((t) => t.transactionType === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Prepare currency conversions for all transactions
+  const currencyConversions = transactions.map(t => ({
+    amount: t.amount,
+    fromCurrency: (t.currency || 'USD') as TCurrency,
+    toCurrency: userPreferredCurrency
+  }));
 
-  const totalExpenses = transactions
-    .filter((t) => t.transactionType === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Convert all amounts in batch for better performance
+  const convertedAmounts = await convertCurrencyBatch(currencyConversions);
+
+  // Calculate totals with converted amounts
+  let totalIncome = 0;
+  let totalExpenses = 0;
+
+  transactions.forEach((t, index) => {
+    const convertedAmount = convertedAmounts[index];
+    if (t.transactionType === 'income') {
+      totalIncome += convertedAmount;
+    } else if (t.transactionType === 'expense') {
+      totalExpenses += convertedAmount;
+    }
+  });
 
   const remainingBalance = totalIncome - totalExpenses;
 
@@ -1941,42 +1953,27 @@ const getFilteredIncomeAndExpenses = async (
     }
   }
 
-  // Create transactions list with type names
+  // Create transactions list with type names and converted amounts
   const transactionsList = await Promise.all(
-    filteredTransactions.map(async (t) => {
+    filteredTransactions.map(async (t, index) => {
       let typeName = null;
 
       // Get the type name for this transaction
       if (t.type_id) {
-        if (t.transactionType === 'expense') {
-          const expenseType = await ExpenseTypesModel.findOne({
-            user_id: { $in: [user_id, null] },
-            'expenseTypeList._id': t.type_id,
-          }).lean();
-          if (expenseType) {
-            const type = expenseType.expenseTypeList.find(
-              (type: any) => type._id.toString() === t.type_id.toString(),
-            );
-            typeName = type ? type.name : null;
-          }
-        } else if (t.transactionType === 'income') {
-          const incomeType = await IncomeTypesModel.findOne({
-            user_id: { $in: [user_id, null] },
-            'incomeTypeList._id': t.type_id,
-          }).lean();
-          if (incomeType) {
-            const type = incomeType.incomeTypeList.find(
-              (type: any) => type._id.toString() === t.type_id.toString(),
-            );
-            typeName = type ? type.name : null;
-          }
-        }
+        const findType = await CategoryModel.findOne({_id: t.type_id }).lean();
+        typeName = findType ? findType.name : null;
       }
+
+      // Find the original transaction index to get the converted amount
+      const originalIndex = transactions.findIndex(orig => orig._id.toString() === t._id.toString());
+      const convertedAmount = originalIndex !== -1 ? convertedAmounts[originalIndex] : t.amount;
 
       return {
         _id: t._id,
-        amount: t.amount,
-        currency: t.currency,
+        amount: convertedAmount, // Use converted amount
+        originalAmount: t.amount, // Keep original amount for reference
+        currency: userPreferredCurrency, // Show user's preferred currency
+        originalCurrency: t.currency, // Keep original currency for reference
         date: t.date,
         description: t.description,
         transactionType: t.transactionType,
@@ -2057,6 +2054,7 @@ const getFilteredIncomeAndExpenses = async (
     totalIncome: Number(totalIncome) || 0,
     totalExpenses: Number(totalExpenses) || 0,
     remainingBalance: Number(remainingBalance) || 0,
+    currency: userPreferredCurrency, // Add user's preferred currency
     // transactionsList: transactionsList || [],
     groupedByDate, // Date-wise grouped transactions with per-day totals
     availableMonths: formattedMonths,
@@ -2095,6 +2093,10 @@ const getMonthlyAnalytics = async (
   year?: number,
   month?: string
 ) => {
+  // Fetch user profile to get preferred currency
+  const userProfile = await ProfileModel.findOne({ user_id, isDeleted: false }).lean();
+  const userPreferredCurrency: TCurrency = (userProfile?.preferredCurrency as TCurrency) || 'USD';
+
   const currentYear = year || new Date().getFullYear();
   const currentMonth = month || new Date().toLocaleDateString('en-US', { month: 'short' });
 
@@ -2130,14 +2132,32 @@ const getMonthlyAnalytics = async (
   // Get all transactions for the month
   const transactions = await TransactionModel.find(baseQuery).lean();
 
-  // Calculate totals
-  const totalIncome = transactions
-    .filter(t => t.transactionType === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Prepare currency conversions for all transactions
+  const currencyConversions = transactions.map(t => ({
+    amount: t.amount,
+    fromCurrency: (t.currency || 'USD') as TCurrency,
+    toCurrency: userPreferredCurrency
+  }));
 
-  const totalExpenses = transactions
-    .filter(t => t.transactionType === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Convert all amounts in batch for better performance
+  const convertedAmounts = await convertCurrencyBatch(currencyConversions);
+
+  // Calculate totals with converted amounts
+  let totalIncome = 0;
+  let totalExpenses = 0;
+
+  const convertedTransactions = transactions.map((t, index) => ({
+    ...t,
+    convertedAmount: convertedAmounts[index]
+  }));
+
+  convertedTransactions.forEach((t) => {
+    if (t.transactionType === 'income') {
+      totalIncome += t.convertedAmount;
+    } else if (t.transactionType === 'expense') {
+      totalExpenses += t.convertedAmount;
+    }
+  });
 
   const savingAmount = totalIncome - totalExpenses;
   const savingPercentage = totalIncome > 0 ? Math.round((savingAmount / totalIncome) * 100) : 0;
@@ -2147,16 +2167,16 @@ const getMonthlyAnalytics = async (
   const incomePercentage = totalMonthlyAmount > 0 ? Math.round((totalIncome / totalMonthlyAmount) * 100) : 0;
   const expensePercentage = totalMonthlyAmount > 0 ? Math.round((totalExpenses / totalMonthlyAmount) * 100) : 0;
 
-  // Get category breakdown for expenses
-  const expenseTransactions = transactions.filter(t => t.transactionType === 'expense');
+  // Get category breakdown for expenses (using converted transactions)
+  const expenseTransactions = convertedTransactions.filter(t => t.transactionType === 'expense');
   const expenseCategoryBreakdown = await getCategoryBreakdown(user_id, expenseTransactions, totalExpenses, 'expense');
 
-  // Get category breakdown for income
-  const incomeTransactions = transactions.filter(t => t.transactionType === 'income');
+  // Get category breakdown for income (using converted transactions)
+  const incomeTransactions = convertedTransactions.filter(t => t.transactionType === 'income');
   const incomeCategoryBreakdown = await getCategoryBreakdown(user_id, incomeTransactions, totalIncome, 'income');
 
-  // Enhanced individual type summary with income, expense, saving per type
-  const typesSummary = await getIndividualTypeSummary(user_id, transactions, totalIncome, totalExpenses);
+  // Enhanced individual type summary with income, expense, saving per type and item-wise currency breakdown
+  const typesSummary = await getIndividualTypeSummary(user_id, convertedTransactions, totalIncome, totalExpenses);
 
   // Get available months for navigation
   const availableMonths = await getAvailableMonths(user_id, currentYear);
@@ -2164,6 +2184,7 @@ const getMonthlyAnalytics = async (
   return {
     viewType: 'monthly',
     period: `${currentMonth} ${currentYear}`,
+    currency: userPreferredCurrency,
     summary: {
       totalIncome: Number(totalIncome) || 0,
       totalExpenses: Number(totalExpenses) || 0,
@@ -2193,6 +2214,10 @@ const getYearlyAnalytics = async (
   userEmail?: string,
   year?: number
 ) => {
+  // Fetch user profile to get preferred currency
+  const userProfile = await ProfileModel.findOne({ user_id, isDeleted: false }).lean();
+  const userPreferredCurrency: TCurrency = (userProfile?.preferredCurrency as TCurrency) || 'USD';
+
   const currentYear = year || new Date().getFullYear();
 
   // Get data for entire year
@@ -2335,7 +2360,9 @@ const getCategoryBreakdown = async (
         transactions: []
       };
     }
-    acc[typeId].amount += transaction.amount;
+    // Use converted amount if available, otherwise use original amount
+    const amount = transaction.convertedAmount !== undefined ? transaction.convertedAmount : transaction.amount;
+    acc[typeId].amount += amount;
     acc[typeId].count += 1;
     acc[typeId].transactions.push(transaction);
     return acc;
@@ -2409,16 +2436,34 @@ const getIndividualTypeSummary = async (
         typeName: '',
         totalIncome: 0,
         totalExpenses: 0,
-        transactionCount: 0
+        transactionCount: 0,
+        currencyBreakdown: {} // Track original currencies and amounts
+      };
+    }
+
+    // Use converted amount if available, otherwise use original amount
+    const convertedAmount = transaction.convertedAmount !== undefined ? transaction.convertedAmount : transaction.amount;
+    const originalAmount = transaction.amount;
+    const originalCurrency = transaction.currency || 'USD';
+    
+    // Track currency breakdown
+    if (!acc[typeId].currencyBreakdown[originalCurrency]) {
+      acc[typeId].currencyBreakdown[originalCurrency] = {
+        income: 0,
+        expenses: 0,
+        count: 0
       };
     }
 
     if (transaction.transactionType === 'income') {
-      acc[typeId].totalIncome += transaction.amount;
+      acc[typeId].totalIncome += convertedAmount;
+      acc[typeId].currencyBreakdown[originalCurrency].income += originalAmount;
     } else {
-      acc[typeId].totalExpenses += transaction.amount;
+      acc[typeId].totalExpenses += convertedAmount;
+      acc[typeId].currencyBreakdown[originalCurrency].expenses += originalAmount;
     }
 
+    acc[typeId].currencyBreakdown[originalCurrency].count += 1;
     acc[typeId].transactionCount += 1;
     return acc;
   }, {});
@@ -2429,28 +2474,13 @@ const getIndividualTypeSummary = async (
       let typeName = 'Unknown';
 
       // Find the type name - check both income and expense types
-      const expenseType = await ExpenseTypesModel.findOne({
+      const expenseType = await CategoryModel.findOne({
         user_id: { $in: [user_id, null] },
-        'expenseTypeList._id': group.typeId
+        '_id': group.typeId
       }).lean();
 
       if (expenseType) {
-        const type = expenseType.expenseTypeList.find(
-          (t: any) => t._id.toString() === group.typeId
-        );
-        typeName = type ? type.name : 'Unknown';
-      } else {
-        const incomeType = await IncomeTypesModel.findOne({
-          user_id: { $in: [user_id, null] },
-          'incomeTypeList._id': group.typeId
-        }).lean();
-
-        if (incomeType) {
-          const type = incomeType.incomeTypeList.find(
-            (t: any) => t._id.toString() === group.typeId
-          );
-          typeName = type ? type.name : 'Unknown';
-        }
+        typeName = (expenseType as any).name;
       }
 
       return {
@@ -2473,13 +2503,29 @@ const getIndividualTypeSummary = async (
           income: 0,
           expense: 0,
           saving: 0
-        }
+        },
+        currencyBreakdown: {}
       };
     }
 
     // Add income and expenses to the existing type
     typesSummaryObject[group.typeName].Income += group.totalIncome;
     typesSummaryObject[group.typeName].Expenses += group.totalExpenses;
+
+    // Merge currency breakdown
+    Object.keys(group.currencyBreakdown).forEach((currency) => {
+      if (!typesSummaryObject[group.typeName].currencyBreakdown[currency]) {
+        typesSummaryObject[group.typeName].currencyBreakdown[currency] = {
+          income: 0,
+          expenses: 0,
+          count: 0
+        };
+      }
+      
+      typesSummaryObject[group.typeName].currencyBreakdown[currency].income += group.currencyBreakdown[currency].income;
+      typesSummaryObject[group.typeName].currencyBreakdown[currency].expenses += group.currencyBreakdown[currency].expenses;
+      typesSummaryObject[group.typeName].currencyBreakdown[currency].count += group.currencyBreakdown[currency].count;
+    });
   });
 
   // Calculate final values for each type
@@ -2499,9 +2545,30 @@ const getIndividualTypeSummary = async (
     typeData.Income = Number(typeData.Income) || 0;
     typeData.Expenses = Number(typeData.Expenses) || 0;
     typeData.savingAmount = Number(typeData.savingAmount) || 0;
+
+    // Format currency breakdown for response
+    const formattedCurrencyBreakdown = Object.keys(typeData.currencyBreakdown).map((currency) => {
+      const currencyData = typeData.currencyBreakdown[currency];
+      return {
+        currency,
+        income: Number(currencyData.income) || 0,
+        expenses: Number(currencyData.expenses) || 0,
+        total: Number(currencyData.income + currencyData.expenses) || 0,
+        transactionCount: currencyData.count
+      };
+    }).sort((a, b) => b.total - a.total); // Sort by total amount descending
+
+    typeData.currencyBreakdown = formattedCurrencyBreakdown;
   });
 
-  return typesSummaryObject;
+  // Convert object to array format
+  const typesSummaryArray = Object.keys(typesSummaryObject).map((typeName) => ({
+    typeName,
+    ...typesSummaryObject[typeName]
+  }));
+
+  // Sort by income descending (optional - you can modify sorting as needed)
+  return typesSummaryArray.sort((a, b) => (b.Income + b.Expenses) - (a.Income + a.Expenses));
 };
 
 // Helper: Get Available Months for a year

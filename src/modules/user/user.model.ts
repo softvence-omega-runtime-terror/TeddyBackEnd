@@ -71,6 +71,12 @@ const ProfileSchema = new Schema<TProfile>(
     emailNotification: { type: Boolean, required: true, default: false },
     notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
     chatList_id: { type: Schema.Types.ObjectId, required: false, ref: 'ChatCollectionList' },
+    preferredCurrency: { 
+      type: String, 
+      enum: ['USD', 'EUR', 'SGD', 'GBP', 'AUD'], 
+      default: 'USD',
+      required: false 
+    },
     isDeleted: { type: Boolean, required: false, default: false },
   }
 );
