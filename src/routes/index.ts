@@ -9,6 +9,7 @@ import { transectionRoutes } from '../modules/transection/transection.route';
 import planRoutes from '../modules/plan/plan.routes';
 import userSubscriptionRoutes from '../modules/userSubscription/userSubscription.route';
 import paymentRoutes from '../modules/payment/payment.route';
+import groupTransactionRouter from '../modules/groupTransection/groupTransection.route';
 
 
 const Routes = express.Router();
@@ -29,6 +30,10 @@ const moduleRouts = [
   {
     path: '/incomeAndExpences',
     router: incomeAndExpenseRouter,
+  },
+  {
+    path: '/groupTransaction',
+    router: groupTransactionRouter,
   },
   {
     path: '/report',
