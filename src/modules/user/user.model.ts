@@ -77,6 +77,12 @@ const ProfileSchema = new Schema<TProfile>(
       default: 'USD',
       required: false 
     },
+    language: {
+      type: String,
+      enum: ['en','id','ms','ko','zh','ja'],
+      required: false,
+      default: 'en'
+    },
     isDeleted: { type: Boolean, required: false, default: false },
   }
 );

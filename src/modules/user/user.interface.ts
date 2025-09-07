@@ -71,6 +71,8 @@ export type TProfile = {
   user_id: Types.ObjectId;
   notificationList_id?: Types.ObjectId; // Optional to align with schema
   preferredCurrency?: 'USD' | 'EUR' | 'SGD' | 'GBP' | 'AUD';
+  // App language preference following ISO 639-1 codes
+  language?: TLanguage;
   isDeleted?: boolean;
 };
 
@@ -79,3 +81,11 @@ export type TCategory = {
   type: 'personal' | 'group';
   user_id: Types.ObjectId;
 };
+
+// Supported UI languages (align with the app's language picker)
+export type TLanguage = 'en'   // English
+  | 'id'  // Bahasa Indonesia
+  | 'ms'  // Bahasa Melayu
+  | 'ko'  // 한국어 (Korean)
+  | 'zh'  // 中文 (Chinese - generic)
+  | 'ja'; // 日本語 (Japanese)

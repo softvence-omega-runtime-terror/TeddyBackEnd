@@ -5,6 +5,7 @@ import globalErrorHandler from './middleware/globalErrorHandler';
 import routeNotFound from './middleware/routeNotFound';
 import Routes from './routes';
 import paymentController from './modules/payment/payment.controller';
+import { localeMiddleware } from './middleware/locale';
 
 
 // Import the stripeWebhook controller
@@ -12,6 +13,7 @@ app.post("/api/payment/webhook", express.raw({ type: "application/json" }), paym
 
 // middleWares
 app.use(express.json());
+app.use(localeMiddleware);
 // app.use(cors());
 app.use(
   cors({
