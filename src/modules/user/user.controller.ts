@@ -423,6 +423,22 @@ const getProfile = catchAsync(async (req, res) => {
   });
 });
 
+const getSettingProfile = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.getSettingProfile(converted_user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'your position retrieved successfully',
+    data: result,
+  });
+});
+
 const updateUserByAdmin = catchAsync(async (req, res) => {
   const user_id = req.params.id;
   const convertedUserId = idConverter(user_id);
@@ -616,7 +632,8 @@ const userController = {
   getUserFullDetails,
   setFCMToken,
   blockUserController,
-  unblockUserController
+  unblockUserController,
+  getSettingProfile
 };
 
 export default userController;

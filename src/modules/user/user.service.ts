@@ -340,6 +340,21 @@ const getProfile = async (user_id: Types.ObjectId) => {
   return profile;
 };
 
+const getSettingProfile = async (user_id: Types.ObjectId) => {
+  const profile = await ProfileModel.findOne({ user_id });
+
+  if (!profile) {
+    throw new Error('Profile not found for the given user_id');
+  }
+
+
+  const modifiedProfile: any = profile.toObject();
+  // i want to include one field
+  modifiedProfile.friendsCount = profile.friends ? profile.friends.length : 0;
+
+  return modifiedProfile;
+};
+
 // In userServices.ts
 const updateUserByAdmin = async (
   userId: Types.ObjectId,
@@ -653,6 +668,7 @@ const userServices = {
   selfDestruct,
   uploadOrChangeImg,
   getProfile,
+  getSettingProfile,
   updateUserProfile,
   getAllProfiles,
   updateUserByAdmin,

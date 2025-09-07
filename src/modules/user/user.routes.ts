@@ -46,6 +46,12 @@ userRoutes.get(
 );
 
 userRoutes.get(
+  '/getSettingProfile',
+  auth([userRole.admin, userRole.user]),
+  userController.getSettingProfile,
+);
+
+userRoutes.get(
   '/userDetails/:id',
   auth([userRole.admin]),
   userController.getUserFullDetails,
