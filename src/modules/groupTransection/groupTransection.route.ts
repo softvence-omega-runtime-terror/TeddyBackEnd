@@ -6,6 +6,10 @@ import groupTransactionController from './groupTransection.controller';
 const groupTransactionRouter = express.Router();
 
 // Define group transaction routes here
-groupTransactionRouter.post('/createGroupTransaction', auth([userRole.user]),groupTransactionController.createGroupTransaction);
+groupTransactionRouter.post('/createGroupTransaction', auth([userRole.user]), groupTransactionController.createGroupTransaction);
+
+groupTransactionRouter.post('/addGroupMember/:groupId', auth([userRole.user]), groupTransactionController.addGroupMember);
+
+groupTransactionRouter.post('/addGroupExpense/:groupId', auth([userRole.user]), groupTransactionController.addGroupExpense);
 
 export default groupTransactionRouter;

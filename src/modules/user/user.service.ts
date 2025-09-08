@@ -349,7 +349,6 @@ const getSettingProfile = async (user_id: Types.ObjectId) => {
 
 
   const modifiedProfile: any = profile.toObject();
-  // i want to include one field
   modifiedProfile.friendsCount = profile.friends ? profile.friends.length : 0;
 
   return modifiedProfile;

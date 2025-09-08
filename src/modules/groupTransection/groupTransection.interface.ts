@@ -4,13 +4,13 @@ import { Types } from "mongoose";
 export type TPaidBy =
     | {
         type: 'individual';
-        memberId: Types.ObjectId;
+        memberEmail: string;
         amount: number;
     }
     | {
         type: 'multiple';
         payments: {
-            memberId: Types.ObjectId;
+            memberEmail: string;
             amount: number;
         }[];
     };
@@ -19,12 +19,12 @@ export type TPaidBy =
 export type TShareWith =
     | {
         type: 'equal';
-        members: Types.ObjectId[]; // List of members to share equally
+        members: string[]; // List of member emails to share equally
     }
     | {
         type: 'custom';
         shares: {
-            memberId: Types.ObjectId;
+            memberEmail: string;
             amount: number;
         }[];
     };
@@ -33,9 +33,10 @@ export type TShareWith =
 export type TGroupTransaction = {
     groupId?: number;
     ownerId?: Types.ObjectId;
+    ownerEmail?: string;
     groupName: string;
-    groupMembers?: Types.ObjectId[];
-    groupExpenses?: [{
+    groupMembers?: string[];
+    groupExpenses?: {
         expenseDate: Date;
         totalExpenseAmount: number;
         currency: 'USD' | 'EUR' | 'SGD' | 'GBP' | 'AUD';
@@ -43,5 +44,5 @@ export type TGroupTransaction = {
         note?: string;
         paidBy: TPaidBy;
         shareWith: TShareWith;
-    }]
+    }[]
 }
