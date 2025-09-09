@@ -317,6 +317,172 @@ const addGroupMember = async ({ groupId, members, user_id }: { groupId: string, 
 };
 
 
+const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null }) => {
+    try {
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+
+        const groups = await GroupTransactionModel.find({
+            $or: [
+                { ownerId: user_id },
+                { groupMembers: userEmail }
+            ]
+        }).lean();
+
+        // Process each group to add comprehensive information
+        const processedGroups = await Promise.all(groups.map(async (group) => {
+            try {
+                // Ensure groupId exists
+                if (!group.groupId) {
+                    throw new Error('Group ID is missing');
+                }
+                
+                // Get group expenses for currency determination (moved up to avoid redeclaration)
+                const groupExpenses = group.groupExpenses || [];
+                const involvedCurrencies = [...new Set(groupExpenses.map((exp: any) => exp.currency))];
+                const defaultCurrency = involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'USD';
+                
+                // Calculate user's financial summary for this group
+                const balances = await calculateGroupBalances(group.groupId.toString());
+                const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
+                
+                // Calculate detailed you'll pay and you'll collect arrays
+                const youllPayDetails: Array<{
+                    memberEmail: string,
+                    currency: string,
+                    amount: number
+                }> = [];
+                
+                const youllCollectDetails: Array<{
+                    memberEmail: string,
+                    currency: string,
+                    amount: number
+                }> = [];
+                
+                // Process each member's balance with current user
+                for (const [memberEmail, memberBalance] of Object.entries(balances)) {
+                    if (memberEmail !== userEmail) {
+                        // Calculate relationship: if memberBalance.net > 0, they are owed money
+                        // if memberBalance.net < 0, they owe money
+                        // From current user's perspective: if member owes money, user should collect
+                        // if member is owed money, user should pay
+                        
+                        if (memberBalance.net > 0) {
+                            // Member is owed money, so current user owes them (user should pay)
+                            youllPayDetails.push({
+                                memberEmail,
+                                currency: defaultCurrency,
+                                amount: memberBalance.net
+                            });
+                        } else if (memberBalance.net < 0) {
+                            // Member owes money, so current user should collect from them
+                            youllCollectDetails.push({
+                                memberEmail,
+                                currency: defaultCurrency,
+                                amount: Math.abs(memberBalance.net)
+                            });
+                        }
+                    }
+                }
+                
+                // Calculate totals for backward compatibility
+                const totalYoullPay = youllPayDetails.reduce((sum, item) => sum + item.amount, 0);
+                const totalYoullCollect = youllCollectDetails.reduce((sum, item) => sum + item.amount, 0);
+                
+                // Calculate total group expenses
+                const totalExpenses = groupExpenses.reduce((sum: number, expense: any) => sum + expense.totalExpenseAmount, 0);
+                
+                // Get all group members including owner
+                const allMembers = [group.ownerEmail, ...(group.groupMembers || [])].filter(Boolean);
+                
+                return {
+                    groupId: group.groupId,
+                    groupName: group.groupName,
+                    groupCreateDate: (group as any).createdAt || new Date(group.groupId * 1000), // Use createdAt or fallback
+                    isOwner: group.ownerEmail === userEmail,
+                    ownerEmail: group.ownerEmail,
+                    groupMembers: group.groupMembers || [],
+                    totalMembers: allMembers.length,
+                    memberDetails: allMembers.map(email => ({
+                        email,
+                        isOwner: email === group.ownerEmail,
+                        isCurrentUser: email === userEmail
+                    })),
+                    financialSummary: {
+                        youllPay: youllPayDetails,
+                        youllCollect: youllCollectDetails,
+                        totalYoullPay: {
+                            currency: defaultCurrency,
+                            amount: totalYoullPay
+                        },
+                        totalYoullCollect: {
+                            currency: defaultCurrency,
+                            amount: totalYoullCollect
+                        },
+                        netBalance: {
+                            amount: Math.abs(userBalance.net),
+                            status: userBalance.net > 0 ? 'you_are_owed' : userBalance.net < 0 ? 'you_owe' : 'settled',
+                            currency: defaultCurrency
+                        }
+                    },
+                    groupStats: {
+                        totalExpenses,
+                        expenseCount: groupExpenses.length,
+                        currencies: involvedCurrencies,
+                        lastExpenseDate: groupExpenses.length > 0 ? 
+                            new Date(Math.max(...groupExpenses.map((exp: any) => new Date(exp.expenseDate).getTime()))) : 
+                            null
+                    }
+                };
+            } catch (error) {
+                console.error(`Error processing group ${group.groupId}:`, error);
+                // Return basic group info if processing fails
+                const fallbackGroupId = group.groupId || 0;
+                return {
+                    groupId: fallbackGroupId,
+                    groupName: group.groupName,
+                    groupCreateDate: (group as any).createdAt || new Date(fallbackGroupId * 1000),
+                    isOwner: group.ownerEmail === userEmail,
+                    ownerEmail: group.ownerEmail,
+                    groupMembers: group.groupMembers || [],
+                    totalMembers: (group.groupMembers?.length || 0) + 1,
+                    memberDetails: [],
+                    financialSummary: {
+                        youllPay: [],
+                        youllCollect: [],
+                        totalYoullPay: { currency: 'USD', amount: 0 },
+                        totalYoullCollect: { currency: 'USD', amount: 0 },
+                        netBalance: { amount: 0, status: 'settled', currency: 'USD' }
+                    },
+                    groupStats: {
+                        totalExpenses: 0,
+                        expenseCount: 0,
+                        currencies: ['USD'],
+                        lastExpenseDate: null
+                    },
+                    error: 'Failed to load financial data'
+                };
+            }
+        }));
+
+        // Sort groups by creation date (newest first)
+        processedGroups.sort((a, b) => new Date(b.groupCreateDate).getTime() - new Date(a.groupCreateDate).getTime());
+
+        return {
+            totalGroups: processedGroups.length,
+            groups: processedGroups
+        };
+
+    } catch (error: any) {
+        console.error('Error in getGroups service:', error.message);
+        throw new Error(`Failed to get groups: ${error.message}`);
+    }
+};
+
+
 const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: string, expenseData: any, user_id: mongoose.Types.ObjectId | null }) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -614,15 +780,59 @@ const getGroupSummary = async (groupId: string) => {
             categoryBreakdown[categoryName] = (categoryBreakdown[categoryName] || 0) + expense.totalExpenseAmount;
         });
 
+        // Prepare comprehensive members list
+        const allMemberEmails = [group.ownerEmail, ...(group.groupMembers || [])];
+        const membersList = [];
+
+        // Get owner details
+        const ownerInfo = group.ownerId as any;
+        const ownerBalance = balances[group.ownerEmail || ''] || { paid: 0, owes: 0, net: 0 };
+        
+        membersList.push({
+            email: group.ownerEmail,
+            name: ownerInfo?.name || 'Unknown',
+            role: 'owner',
+            isOwner: true,
+            balance: {
+                paid: ownerBalance.paid,
+                owes: ownerBalance.owes,
+                net: ownerBalance.net,
+                status: ownerBalance.net > 0 ? 'is_owed' : ownerBalance.net < 0 ? 'owes' : 'settled'
+            }
+        });
+
+        // Get member details for group members
+        for (const memberEmail of (group.groupMembers || [])) {
+            const memberUser = await UserModel.findOne({ email: memberEmail }).select('name email').lean();
+            const memberBalance = balances[memberEmail] || { paid: 0, owes: 0, net: 0 };
+            
+            membersList.push({
+                email: memberEmail,
+                name: memberUser?.name || 'Unknown',
+                role: 'member',
+                isOwner: false,
+                balance: {
+                    paid: memberBalance.paid,
+                    owes: memberBalance.owes,
+                    net: memberBalance.net,
+                    status: memberBalance.net > 0 ? 'is_owed' : memberBalance.net < 0 ? 'owes' : 'settled'
+                }
+            });
+        }
+
         return {
             group: {
                 groupId: group.groupId,
                 groupName: group.groupName,
                 ownerId: group.ownerId,
+                ownerEmail: group.ownerEmail,
                 memberCount: (group.groupMembers?.length || 0) + 1, // +1 for owner
                 totalExpenses,
-                expenseCount: group.groupExpenses?.length || 0
+                expenseCount: group.groupExpenses?.length || 0,
+                createdAt: (group as any).createdAt,
+                updatedAt: (group as any).updatedAt
             },
+            members: membersList,
             balances,
             categoryBreakdown,
             recentExpenses: group.groupExpenses?.slice(-5) || [] // Last 5 expenses
@@ -836,6 +1046,7 @@ const getGroupTransactions = async ({
 const groupTransactionServices = {
     createGroupTransaction,
     addGroupMember,
+    getGroups,
     addGroupExpense,
     getGroupTransactions,
     getGroupStatus,
