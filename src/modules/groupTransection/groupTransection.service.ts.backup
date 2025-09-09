@@ -2,18 +2,29 @@ import mongoose from "mongoose";
 import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
 
+const createGroupTransaction = async ({ groupName, user_id }: { groupName: string, user_id: mongoose.Types.ObjectId | null }) => {
+    try {
+
+        const generatedGroupId = new mongoose.Types.ObjectId();
+
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+
+        const newGroup = new GroupTransactionModel({
+            groupId: ge    };
+};
+
 // Get comprehensive group status with summary and breakdowns
-const getGroupStatus = async ({
-    groupId,
-    user_id
-}: {
-    groupId: string,
+const getGroupStatus = async ({ 
+    groupId, 
+    user_id 
+}: { 
+    groupId: string, 
     user_id: mongoose.Types.ObjectId | null
 }) => {
     try {
         // Get user email
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-
+        
         if (!userEmail) {
             throw new Error('User email not found');
         }
@@ -30,67 +41,46 @@ const getGroupStatus = async ({
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
-
+        
         if (!isOwner && !isMember) {
             throw new Error('You are not authorized to view this group status');
         }
 
         // Get all group members including owner
         const allMembers = [group.ownerEmail, ...(group.groupMembers || [])];
-
-        // Determine involved currencies (get unique currencies from expenses)
-        const involvedCurrencies = [...new Set((group.groupExpenses || []).map(exp => exp.currency))];
-        const defaultCurrency = involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'USD';
-
+        
         // Calculate balances for all members
         const balances = await calculateGroupBalances(groupId);
-
+        
         // Initialize summary data
         let totalGroupExpenses = 0;
         let userTotalPaid = 0;
         let userTotalOwes = 0;
-
+        
         // Category-wise breakdown
-        const categoryBreakdown: {
-            [categoryName: string]: {
-                totalAmount: number,
-                userPaid: number,
-                userOwes: number,
-                percentage: number,
-                currency: string
-            }
-        } = {};
-
+        const categoryBreakdown: { [categoryName: string]: {
+            totalAmount: number,
+            userPaid: number,
+            userOwes: number,
+            percentage: number,
+            currency: string
+        }} = {};
+        
         // Person-wise breakdown
-        const personBreakdown: {
-            [email: string]: {
-                totalInvolved: number,
-                userPaidToThem: number,
-                userOwesFromThem: number,
-                percentage: number,
-                currency: string
-            }
-        } = {};
-
-        // Initialize person breakdown for all group members
-        for (const memberEmail of allMembers) {
-            if (memberEmail) { // Type guard to ensure memberEmail is not undefined
-                personBreakdown[memberEmail] = {
-                    totalInvolved: 0,
-                    userPaidToThem: 0,
-                    userOwesFromThem: 0,
-                    percentage: 0,
-                    currency: defaultCurrency
-                };
-            }
-        }
+        const personBreakdown: { [email: string]: {
+            totalInvolved: number,
+            userPaidToThem: number,
+            userOwesFromThem: number,
+            percentage: number,
+            currency: string
+        }} = {};
 
         // Process each expense
         for (const expense of group.groupExpenses || []) {
             totalGroupExpenses += expense.totalExpenseAmount;
-
+            
             const categoryName = (expense.category as any)?.name || 'Unknown';
-
+            
             // Initialize category if not exists
             if (!categoryBreakdown[categoryName]) {
                 categoryBreakdown[categoryName] = {
@@ -101,10 +91,10 @@ const getGroupStatus = async ({
                     currency: expense.currency
                 };
             }
-
+            
             // Add to category total
             categoryBreakdown[categoryName].totalAmount += expense.totalExpenseAmount;
-
+            
             // Calculate user's payment for this expense
             let userPaidInExpense = 0;
             if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
@@ -113,10 +103,10 @@ const getGroupStatus = async ({
                 const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
                 userPaidInExpense = userPayment?.amount || 0;
             }
-
+            
             userTotalPaid += userPaidInExpense;
             categoryBreakdown[categoryName].userPaid += userPaidInExpense;
-
+            
             // Calculate user's share for this expense
             let userOwesInExpense = 0;
             if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
@@ -125,32 +115,60 @@ const getGroupStatus = async ({
                 const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
                 userOwesInExpense = userShare?.amount || 0;
             }
-
+            
             userTotalOwes += userOwesInExpense;
             categoryBreakdown[categoryName].userOwes += userOwesInExpense;
-
-            // Track total involvement for each person who paid
+            
+            // Process person-wise breakdown
+            // For people who paid in this expense
             if (expense.paidBy.type === 'individual') {
-                const payerEmail: string = expense.paidBy.memberEmail;
-                if (personBreakdown[payerEmail]) {
-                    personBreakdown[payerEmail].totalInvolved += expense.paidBy.amount;
+                const payerEmail = expense.paidBy.memberEmail;
+                if (!personBreakdown[payerEmail]) {
+                    personBreakdown[payerEmail] = {
+                        totalInvolved: 0,
+                        userPaidToThem: 0,
+                        userOwesFromThem: 0,
+                        percentage: 0,
+                        currency: expense.currency
+                    };
+                }
+                personBreakdown[payerEmail].totalInvolved += expense.paidBy.amount;
+                
+                if (payerEmail !== userEmail) {
+                    // If user owes share to this person
+                    if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+                        personBreakdown[payerEmail].userOwesFromThem += userOwesInExpense;
+                    } else if (expense.shareWith.type === 'custom') {
+                        personBreakdown[payerEmail].userOwesFromThem += userOwesInExpense;
+                    }
                 }
             } else if (expense.paidBy.type === 'multiple') {
                 for (const payment of expense.paidBy.payments || []) {
-                    if (personBreakdown[payment.memberEmail]) {
-                        personBreakdown[payment.memberEmail].totalInvolved += payment.amount;
+                    if (!personBreakdown[payment.memberEmail]) {
+                        personBreakdown[payment.memberEmail] = {
+                            totalInvolved: 0,
+                            userPaidToThem: 0,
+                            userOwesFromThem: 0,
+                            percentage: 0,
+                            currency: expense.currency
+                        };
+                    }
+                    personBreakdown[payment.memberEmail].totalInvolved += payment.amount;
+                    
+                    if (payment.memberEmail === userEmail) {
+                        personBreakdown[payment.memberEmail].userPaidToThem += payment.amount;
                     }
                 }
             }
         }
-
+        
         // Calculate percentages for categories
         for (const category in categoryBreakdown) {
             if (totalGroupExpenses > 0) {
                 categoryBreakdown[category].percentage = (categoryBreakdown[category].totalAmount / totalGroupExpenses) * 100;
             }
         }
-
+        
         // Calculate percentages for persons and clean up data
         for (const person in personBreakdown) {
             if (totalGroupExpenses > 0) {
@@ -160,10 +178,13 @@ const getGroupStatus = async ({
 
         // Calculate user's involvement percentage
         const userInvolvementPercentage = totalGroupExpenses > 0 ? (userTotalOwes / totalGroupExpenses) * 100 : 0;
-
+        
         // Get user's net balance
         const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
-
+        
+        // Determine involved currencies (get unique currencies from expenses)
+        const involvedCurrencies = [...new Set((group.groupExpenses || []).map(exp => exp.currency))];
+        
         return {
             group: {
                 groupId: group.groupId,
@@ -186,71 +207,30 @@ const getGroupStatus = async ({
             },
             categoryWise: Object.keys(categoryBreakdown).map(categoryName => ({
                 categoryName,
-                involved: {
-                    currency: categoryBreakdown[categoryName].currency,
-                    amount: categoryBreakdown[categoryName].totalAmount,
-                    percentage: parseFloat(categoryBreakdown[categoryName].percentage.toFixed(2))
-                },
-                myExpense: {
-                    currency: categoryBreakdown[categoryName].currency,
-                    amount: categoryBreakdown[categoryName].userPaid,
-                    percentage: categoryBreakdown[categoryName].totalAmount > 0 ?
-                        parseFloat(((categoryBreakdown[categoryName].userPaid / categoryBreakdown[categoryName].totalAmount) * 100).toFixed(2)) : 0
+                totalAmount: categoryBreakdown[categoryName].totalAmount,
+                currency: categoryBreakdown[categoryName].currency,
+                percentage: parseFloat(categoryBreakdown[categoryName].percentage.toFixed(2)),
+                myInvolvement: {
+                    paid: categoryBreakdown[categoryName].userPaid,
+                    owes: categoryBreakdown[categoryName].userOwes,
+                    percentage: categoryBreakdown[categoryName].totalAmount > 0 ? 
+                        parseFloat(((categoryBreakdown[categoryName].userOwes / categoryBreakdown[categoryName].totalAmount) * 100).toFixed(2)) : 0
                 }
-            })).sort((a, b) => b.involved.amount - a.involved.amount),
-            personWise: Object.keys(personBreakdown).map(email => {
-                const memberTotalInvolved = personBreakdown[email].totalInvolved;
-                const memberPercentage = totalGroupExpenses > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
-
-                // Calculate user's expense related to this person (how much user paid for expenses involving this person)
-                let userExpenseForThisPerson = 0;
-                let userExpensePercentageForThisPerson = 0;
-
-                // Go through all expenses and see which ones involve this person
-                for (const expense of group.groupExpenses || []) {
-                    let personInvolvedInExpense = false;
-
-                    // Check if this person paid for the expense
-                    if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === email) {
-                        personInvolvedInExpense = true;
-                    } else if (expense.paidBy.type === 'multiple') {
-                        personInvolvedInExpense = expense.paidBy.payments?.some(p => p.memberEmail === email) || false;
-                    }
-
-                    // Check if this person is in the shareWith
-                    if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(email)) {
-                        personInvolvedInExpense = true;
-                    } else if (expense.shareWith.type === 'custom') {
-                        personInvolvedInExpense = expense.shareWith.shares?.some(s => s.memberEmail === email) || false;
-                    }
-
-                    // If this person is involved in the expense, calculate user's payment for this expense
-                    if (personInvolvedInExpense) {
-                        if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                            userExpenseForThisPerson += expense.paidBy.amount;
-                        } else if (expense.paidBy.type === 'multiple') {
-                            const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                            userExpenseForThisPerson += userPayment?.amount || 0;
-                        }
-                    }
+            })).sort((a, b) => b.totalAmount - a.totalAmount),
+            personWise: Object.keys(personBreakdown).map(email => ({
+                memberEmail: email,
+                totalInvolved: personBreakdown[email].totalInvolved,
+                currency: personBreakdown[email].currency,
+                percentage: parseFloat(personBreakdown[email].percentage.toFixed(2)),
+                myRelation: {
+                    paidToThem: personBreakdown[email].userPaidToThem,
+                    owesFromThem: personBreakdown[email].userOwesFromThem,
+                    net: personBreakdown[email].userPaidToThem - personBreakdown[email].userOwesFromThem,
+                    status: email === userEmail ? 'myself' : 
+                            (personBreakdown[email].userPaidToThem - personBreakdown[email].userOwesFromThem) > 0 ? 'they_owe_me' :
+                            (personBreakdown[email].userPaidToThem - personBreakdown[email].userOwesFromThem) < 0 ? 'i_owe_them' : 'settled'
                 }
-
-                userExpensePercentageForThisPerson = memberTotalInvolved > 0 ? (userExpenseForThisPerson / memberTotalInvolved) * 100 : 0;
-
-                return {
-                    memberEmail: email,
-                    involved: {
-                        currency: personBreakdown[email].currency,
-                        amount: memberTotalInvolved,
-                        percentage: parseFloat(memberPercentage.toFixed(2))
-                    },
-                    myExpense: {
-                        currency: personBreakdown[email].currency,
-                        amount: userExpenseForThisPerson,
-                        percentage: parseFloat(userExpensePercentageForThisPerson.toFixed(2))
-                    }
-                };
-            }).sort((a, b) => b.involved.amount - a.involved.amount),
+            })).sort((a, b) => b.totalInvolved - a.totalInvolved),
             currencies: involvedCurrencies,
             lastUpdated: new Date().toISOString()
         };
@@ -269,15 +249,9 @@ const createGroupTransaction = async ({ groupName, user_id }: { groupName: strin
 
         // Get user email for the new group
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-
+        
         if (!userEmail) {
             throw new Error('User email not found');
-        }
-
-        const existingGroup = await GroupTransactionModel.findOne({ ownerId: user_id }).countDocuments();
-
-        if (existingGroup === 2) {
-            throw new Error('Group limit reached. You can only create up to 2 groups in free tier.');
         }
 
         const generatedGroupId = Math.floor(Date.now() / 1000);
@@ -369,8 +343,6 @@ const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: str
         // Validate shareWith structure
         await validateShareWith(shareWith, totalExpenseAmount, group);
 
-        const modifyPaidBy = { ...paidBy, amount: totalExpenseAmount };
-
         // Create expense object
         const newExpense = {
             expenseDate: new Date(expenseDate),
@@ -378,7 +350,7 @@ const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: str
             currency,
             category: new mongoose.Types.ObjectId(category),
             note: note || '',
-            paidBy: modifyPaidBy,
+            paidBy,
             shareWith
         };
 
@@ -411,8 +383,12 @@ const validatePaidBy = async (paidBy: any, totalAmount: number, group: any) => {
     }
 
     if (paidBy.type === 'individual') {
-        if (!paidBy.memberEmail || !totalAmount) {
+        if (!paidBy.memberEmail || !paidBy.amount) {
             throw new Error('For individual payment, memberEmail and amount are required');
+        }
+
+        if (paidBy.amount !== totalAmount) {
+            throw new Error('For individual payment, amount must equal totalExpenseAmount');
         }
 
         // Verify member exists in group
@@ -650,12 +626,12 @@ const settleDebt = async (groupId: string, fromMemberId: string, toMemberId: str
 };
 
 // Get comprehensive group transactions with filtering and user-specific data
-const getGroupTransactions = async ({
-    groupId,
-    user_id,
-    filters
-}: {
-    groupId: string,
+const getGroupTransactions = async ({ 
+    groupId, 
+    user_id, 
+    filters 
+}: { 
+    groupId: string, 
     user_id: mongoose.Types.ObjectId | null,
     filters?: {
         expenseView?: 'all' | 'involving_me_only',
@@ -666,7 +642,7 @@ const getGroupTransactions = async ({
     try {
         // Get user email
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-
+        
         if (!userEmail) {
             throw new Error('User email not found');
         }
@@ -683,7 +659,7 @@ const getGroupTransactions = async ({
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
-
+        
         if (!isOwner && !isMember) {
             throw new Error('You are not authorized to view this group');
         }
@@ -691,7 +667,7 @@ const getGroupTransactions = async ({
         // Calculate user-specific summary
         const balances = await calculateGroupBalances(groupId);
         const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
-
+        
         const youllPay = userBalance.net < 0 ? Math.abs(userBalance.net) : 0;
         const youllCollect = userBalance.net > 0 ? userBalance.net : 0;
 
@@ -731,7 +707,7 @@ const getGroupTransactions = async ({
             }
 
             const userNet = userPaid - userOwes;
-
+            
             return {
                 _id: (expense as any)._id,
                 expenseDate: expense.expenseDate,
@@ -754,7 +730,7 @@ const getGroupTransactions = async ({
         // Apply expense view filter
         let filteredExpenses = processedExpenses;
         if (filters?.expenseView === 'involving_me_only') {
-            filteredExpenses = processedExpenses.filter(expense =>
+            filteredExpenses = processedExpenses.filter(expense => 
                 expense.userInvolvement.paid > 0 || expense.userInvolvement.owes > 0
             );
         }

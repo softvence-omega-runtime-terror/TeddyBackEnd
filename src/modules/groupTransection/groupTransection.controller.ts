@@ -80,10 +80,78 @@ const addGroupExpense = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getGroupTransactions = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const user_id = userId ? idConverter(userId) : null;
+
+    const { groupId } = req.params;
+    const { expenseView, transactionType, search } = req.query;
+
+    if (!groupId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Group ID is required',
+        });
+    }
+
+    // Prepare filters
+    const filters: any = {};
+    if (expenseView && (expenseView === 'all' || expenseView === 'involving_me_only')) {
+        filters.expenseView = expenseView;
+    }
+    if (transactionType && ['i_borrowed', 'i_lent', 'all'].includes(transactionType as string)) {
+        filters.transactionType = transactionType;
+    }
+    if (search && typeof search === 'string') {
+        filters.search = search.trim();
+    }
+
+    const groupData = await groupTransactionServices.getGroupTransactions({
+        groupId,
+        user_id,
+        filters
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: groupData,
+        message: 'Group transactions retrieved successfully',
+    });
+});
+
+const getGroupStatus = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const user_id = userId ? idConverter(userId) : null;
+
+    const { groupId } = req.params;
+
+    if (!groupId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Group ID is required',
+        });
+    }
+
+    const groupStatus = await groupTransactionServices.getGroupStatus({
+        groupId,
+        user_id
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: groupStatus,
+        message: 'Group status retrieved successfully',
+    });
+});
+
+
+
 const groupTransactionController = {
     createGroupTransaction,
     addGroupMember,
-    addGroupExpense
+    addGroupExpense,
+    getGroupTransactions,
+    getGroupStatus
 };
 
 export default groupTransactionController;

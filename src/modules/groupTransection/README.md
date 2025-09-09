@@ -210,3 +210,234 @@ The service includes comprehensive validation:
 - **Balance Tracking**: Balances keyed by email addresses
 - **Validation**: Email-based membership verification
 - **Simpler Integration**: No need to resolve ObjectIds to emails for display
+
+## API Endpoint: Get Group Transactions
+
+### `getGroupTransactions`
+**GET** `/api/groupTransaction/getGroupTransactions/:groupId`
+
+Retrieves comprehensive group transaction data with user-specific summaries, filtering, and search capabilities.
+
+#### Query Parameters:
+- `expenseView` (optional): `"all"` | `"involving_me_only"` - Filter expenses based on user involvement
+- `transactionType` (optional): `"i_borrowed"` | `"i_lent"` | `"all"` - Filter by transaction type
+- `search` (optional): Search expenses by category name or note
+
+#### Example Request:
+```
+GET /api/groupTransaction/getGroupTransactions/12345?expenseView=involving_me_only&transactionType=i_borrowed&search=lunch
+```
+
+#### Response Structure:
+```json
+{
+  "status": "success",
+  "data": {
+    "group": {
+      "groupId": 12345,
+      "groupName": "Roommates Expenses",
+      "ownerEmail": "owner@example.com",
+      "groupMembers": ["john@example.com", "jane@example.com", "bob@example.com"],
+      "totalMembers": 4
+    },
+    "summary": {
+      "youllPay": {
+        "currency": "USD",
+        "amount": 75.50
+      },
+      "youllCollect": {
+        "currency": "USD",
+        "amount": 0
+      },
+      "totalExpenses": 450.00,
+      "totalUserBorrowed": 75.50,
+      "totalUserLent": 0
+    },
+    "expenses": {
+      "list": [
+        {
+          "_id": "expense_id_1",
+          "expenseDate": "2024-01-15T10:30:00.000Z",
+          "totalExpenseAmount": 150.00,
+          "currency": "USD",
+          "category": {
+            "_id": "category_id",
+            "name": "Food & Dining"
+          },
+          "note": "Team lunch at Italian restaurant",
+          "paidBy": {
+            "type": "individual",
+            "memberEmail": "john@example.com",
+            "amount": 150.00
+          },
+          "shareWith": {
+            "type": "equal",
+            "members": ["john@example.com", "jane@example.com", "bob@example.com"]
+          },
+          "userInvolvement": {
+            "paid": 0,
+            "owes": 50.00,
+            "net": -50.00,
+            "status": "you_borrowed",
+            "amount": 50.00
+          }
+        }
+      ],
+      "byCategory": {
+        "Food & Dining": [...],
+        "Transportation": [...]
+      },
+      "byDate": {
+        "2024-01-15": [...],
+        "2024-01-14": [...]
+      },
+      "count": 5
+    },
+    "filters": {
+      "expenseView": "involving_me_only",
+      "transactionType": "i_borrowed",
+      "search": "lunch"
+    },
+    "balances": {
+      "john@example.com": {
+        "paid": 300.00,
+        "owes": 150.00,
+        "net": 150.00
+      },
+      "jane@example.com": {
+        "paid": 100.00,
+        "owes": 150.00,
+        "net": -50.00
+      }
+    }
+  },
+  "message": "Group transactions retrieved successfully"
+}
+```
+
+#### Key Features:
+- **User-Specific Summary**: Shows exactly how much the user will pay or collect
+- **Expense Filtering**: 
+  - View all expenses or only those involving the user
+  - Filter by transaction type (borrowed, lent, all)
+  - Search by category name or expense note
+- **Categorized Data**: Expenses grouped by category and date
+- **User Involvement**: Each expense shows user's involvement status and amounts
+- **Balance Tracking**: Complete balance overview for all group members
+
+#### User Involvement Status:
+- `"you_borrowed"`: User owes money for this expense
+- `"you_lent"`: User is owed money for this expense  
+- `"settled"`: User's payment equals their share
+
+## API Endpoint: Get Group Status
+
+### `getGroupStatus`
+**GET** `/api/groupTransaction/getGroupStatus/:groupId`
+
+Retrieves comprehensive group status with overall summary and detailed breakdowns by category and person.
+
+#### Example Request:
+```
+GET /api/groupTransaction/getGroupStatus/12345
+```
+
+#### Response Structure:
+```json
+{
+  "status": "success",
+  "data": {
+    "group": {
+      "groupId": 12345,
+      "groupName": "Roommates Expenses",
+      "ownerEmail": "owner@example.com",
+      "totalMembers": 4,
+      "totalExpenses": 850.00
+    },
+    "summary": {
+      "involvedCurrency": "USD",
+      "involvedAmount": 275.50,
+      "myExpensesPercentage": 32.41,
+      "myExpensesCurrency": "USD",
+      "myExpensesAmount": 300.00,
+      "netBalance": {
+        "amount": 24.50,
+        "status": "you_are_owed",
+        "currency": "USD"
+      }
+    },
+    "categoryWise": [
+      {
+        "categoryName": "Food & Dining",
+        "totalAmount": 450.00,
+        "currency": "USD",
+        "percentage": 52.94,
+        "myInvolvement": {
+          "paid": 200.00,
+          "owes": 150.00,
+          "percentage": 33.33
+        }
+      },
+      {
+        "categoryName": "Transportation",
+        "totalAmount": 250.00,
+        "currency": "USD",
+        "percentage": 29.41,
+        "myInvolvement": {
+          "paid": 100.00,
+          "owes": 83.33,
+          "percentage": 33.33
+        }
+      }
+    ],
+    "personWise": [
+      {
+        "memberEmail": "john@example.com",
+        "totalInvolved": 400.00,
+        "currency": "USD",
+        "percentage": 47.06,
+        "myRelation": {
+          "paidToThem": 0,
+          "owesFromThem": 133.33,
+          "net": -133.33,
+          "status": "i_owe_them"
+        }
+      },
+      {
+        "memberEmail": "jane@example.com",
+        "totalInvolved": 300.00,
+        "currency": "USD",
+        "percentage": 35.29,
+        "myRelation": {
+          "paidToThem": 300.00,
+          "owesFromThem": 100.00,
+          "net": 200.00,
+          "status": "myself"
+        }
+      }
+    ],
+    "currencies": ["USD"],
+    "lastUpdated": "2025-09-09T12:00:00.000Z"
+  },
+  "message": "Group status retrieved successfully"
+}
+```
+
+#### Key Features:
+- **Overall Summary**: Total involved amount, user's expense percentage, and net balance status
+- **Category-wise Breakdown**: Shows spending by category with user's involvement percentage
+- **Person-wise Breakdown**: Shows each member's total involvement and relationship with the user
+- **Multi-currency Support**: Handles mixed currencies appropriately
+- **Net Balance Calculation**: Shows if user owes money, is owed money, or is settled
+
+#### Summary Fields:
+- `involvedAmount`: Total amount user is involved in (what user owes)
+- `myExpensesAmount`: Total amount user has paid
+- `myExpensesPercentage`: User's share percentage of total group expenses
+- `netBalance.status`: `"you_are_owed"`, `"you_owe"`, or `"settled"`
+
+#### Person Relation Status:
+- `"myself"`: The current user
+- `"they_owe_me"`: The person owes money to the current user
+- `"i_owe_them"`: The current user owes money to this person
+- `"settled"`: No outstanding balance between user and this person

@@ -12,4 +12,8 @@ groupTransactionRouter.post('/addGroupMember/:groupId', auth([userRole.user]), g
 
 groupTransactionRouter.post('/addGroupExpense/:groupId', auth([userRole.user]), groupTransactionController.addGroupExpense);
 
+groupTransactionRouter.get('/getGroupTransactions/:groupId', auth([userRole.user]), groupTransactionController.getGroupTransactions);
+
+groupTransactionRouter.get('/getGroupStatus/:groupId', auth([userRole.user]), groupTransactionController.getGroupStatus);
+
 export default groupTransactionRouter;

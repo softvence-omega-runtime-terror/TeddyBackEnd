@@ -8,6 +8,7 @@ import authUtil from '../auth/auth.util';
 import { userRole } from '../../constants';
 import updateGroupAndTransactions from './userUtill';
 import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
+import { GroupTransactionModel } from '../groupTransection/groupTransection.model';
 
 const createUser = async (payload: Partial<TUser>) => {
 
@@ -347,9 +348,16 @@ const getSettingProfile = async (user_id: Types.ObjectId) => {
     throw new Error('Profile not found for the given user_id');
   }
 
+  const groupList = await GroupTransactionModel.find({ 
+    $or: [
+      { ownerId: user_id }, 
+      { groupMembers: profile.email }
+    ]
+  });
 
   const modifiedProfile: any = profile.toObject();
   modifiedProfile.friendsCount = profile.friends ? profile.friends.length : 0;
+  modifiedProfile.groupList = groupList || [];
 
   return modifiedProfile;
 };
