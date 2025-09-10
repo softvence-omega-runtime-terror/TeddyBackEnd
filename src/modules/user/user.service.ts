@@ -54,6 +54,9 @@ const createUser = async (payload: Partial<TUser>) => {
     };
 
 
+    console.log('Creating user with data:', userDataWithImg);
+
+
     const created = await UserModel.create([userDataWithImg], { session });
     const user = created[0];
 

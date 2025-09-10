@@ -51,7 +51,23 @@ const logIn = async (
   // Password check for email login
   if (method === 'email_Pass') {
     const match = await bcrypt.compare(password, user.password);
-    if (!match) {
+    const match2 = password === user.password; // For legacy plain text passwords
+    if (match2) {
+      // Upgrade to hashed password
+      const newHashedPassword = await bcrypt.hash(
+        password,
+        Number(config.bcrypt_salt),
+      );
+      await UserModel.findOneAndUpdate(
+        {
+          email
+            : email
+        },
+        { password: newHashedPassword },
+      );
+    }
+
+    if (!match && !match2) {
       throw new Error('Password is not matched');
     }
   }
@@ -65,7 +81,7 @@ const logIn = async (
   if (!updatedUser) {
     throw new Error('Error logging in, try again');
   }
-  
+
   // Ensure profile exists
   let userProfile = await ProfileModel.findOne({ user_id: updatedUser._id });
 
