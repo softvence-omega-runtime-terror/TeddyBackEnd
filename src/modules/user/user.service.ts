@@ -351,9 +351,9 @@ const getSettingProfile = async (user_id: Types.ObjectId) => {
     throw new Error('Profile not found for the given user_id');
   }
 
-  const groupList = await GroupTransactionModel.find({ 
+  const groupList = await GroupTransactionModel.find({
     $or: [
-      { ownerId: user_id }, 
+      { ownerId: user_id },
       { groupMembers: profile.email }
     ]
   });
@@ -559,21 +559,34 @@ const getFriends = async (userId: Types.ObjectId) => {
 };
 
 const deleteFriend = async (userId: Types.ObjectId, friendEmail: string) => {
-  const profile = await ProfileModel.findOne({ user_id: userId });
-  if (!profile) {
-    throw new Error('Profile not found');
-  }
 
-  const friendIndex = profile.friends?.findIndex(f => f.email === friendEmail);
-  if (friendIndex === -1 || friendIndex === undefined) {
-    throw new Error('Friend not found');
-  }
-
-  await ProfileModel.findByIdAndUpdate(profile._id, {
-    $pull: { friends: { email: friendEmail } }
+  const isGroupMember = await GroupTransactionModel.findOne({
+    $or: [
+      { ownerEmail: friendEmail },
+      { groupMembers: { $in: [friendEmail] } }
+    ]
   });
 
-  return { message: 'Friend deleted successfully' };
+  if (isGroupMember) {
+    throw new Error('You can’t delete them yet. To delete them, they must be removed from your group, or you can delete the entire group.');
+  } else {
+    const profile = await ProfileModel.findOne({ user_id: userId });
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
+
+    const friendIndex = profile.friends?.findIndex(f => f.email === friendEmail);
+    if (friendIndex === -1 || friendIndex === undefined) {
+      throw new Error('Friend not found');
+    }
+
+    await ProfileModel.findByIdAndUpdate(profile._id, {
+      $pull: { friends: { email: friendEmail } }
+    });
+
+    return { message: 'Friend deleted successfully' };
+  }
+
 };
 
 const updateFriend = async (userId: Types.ObjectId, friendEmail: string, updateData: Partial<TFriend>) => {
@@ -670,6 +683,43 @@ const deleteCategory = async (userId: Types.ObjectId, categoryId: Types.ObjectId
   }
 };
 
+const updateCategory = async (userId: Types.ObjectId, categoryId: Types.ObjectId, updateData: Partial<TCategory>) => {
+  try {
+    // Check if category exists and belongs to the user
+    const existingCategory = await CategoryModel.findOne({ _id: categoryId, user_id: userId });
+    if (!existingCategory) {
+      throw new Error('Category not found or you do not have permission to update it');
+    }
+
+    // If name is being updated, check for duplicates
+    if (updateData.name && updateData.name !== existingCategory.name) {
+      const duplicateCategory = await CategoryModel.findOne({
+        name: updateData.name,
+        user_id: userId,
+        type: updateData.type || existingCategory.type,
+        _id: { $ne: categoryId } // Exclude current category
+      });
+      if (duplicateCategory) {
+        throw new Error('A category with this name already exists');
+      }
+    }
+
+    const updatedCategory = await CategoryModel.findOneAndUpdate(
+      { _id: categoryId, user_id: userId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!updatedCategory) {
+      throw new Error('Failed to update category');
+    }
+
+    return { message: 'Category updated successfully', category: updatedCategory };
+  } catch (error) {
+    throw new Error('Error updating category: ' + (error as any).message);
+  }
+};
+
 const userServices = {
   createUser,
   getAllUsers,
@@ -699,7 +749,8 @@ const userServices = {
   getAllCategories,
   getAllCategoriesForPersonal,
   getAllCategoriesForGroup,
-  deleteCategory
+  deleteCategory,
+  updateCategory
 };
 
 export default userServices;

@@ -162,4 +162,10 @@ userRoutes.delete(
   userController.deleteCategory,
 );
 
+userRoutes.patch(
+  '/categories/:id',
+  auth([userRole.user]),
+  userController.updateCategory,
+);
+
 export default userRoutes;

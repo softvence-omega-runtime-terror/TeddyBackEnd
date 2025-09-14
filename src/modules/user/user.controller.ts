@@ -607,6 +607,27 @@ const deleteCategory = catchAsync(async (req, res) => {
   });
 });
 
+const updateCategory = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const category_id = req.params.id;
+  const converted_category_id = idConverter(category_id);
+  if (!converted_category_id) {
+    throw Error('category id conversion failed');
+  }
+  const result = await userServices.updateCategory(converted_user_id, converted_category_id, req.body);
+
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Category updated successfully',
+    data: result,
+  });
+});
+
 
 const userController = {
   addFriend,
@@ -618,6 +639,7 @@ const userController = {
   getAllCategoriesForPersonal,
   getAllCategoriesForGroup,
   deleteCategory,
+  updateCategory,
   updateFriend,
   createUser,
   getAllUsers,
