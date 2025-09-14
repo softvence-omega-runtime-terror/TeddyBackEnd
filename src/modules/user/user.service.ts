@@ -569,6 +569,7 @@ const deleteFriend = async (userId: Types.ObjectId, friendEmail: string) => {
 
   if (isGroupMember) {
     throw new Error('You can’t delete them yet. To delete them, they must be removed from your group, or you can delete the entire group.');
+    
   } else {
     const profile = await ProfileModel.findOne({ user_id: userId });
     if (!profile) {
