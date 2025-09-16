@@ -3,6 +3,11 @@ import { TPlan } from "./plan.interface";
 
 const planSchema = new Schema<TPlan>({
     name: { type: String, required: true, unique: true },
+    aiAssistent: { type: Boolean, default: false },
+    aiChatBot: { type: Boolean, default: false },
+    aiChatCountLimit: { type: Number, default: 100 },
+    smartBudgeting: { type: Boolean, default: false },
+    splitBills: { type: Number, default: 3 },
     price: { type: Number, required: true },
     stripePriceId: { type: String, unique: true, required: true },
     services: { type: [Schema.Types.ObjectId], ref: "services", required: true },
@@ -11,8 +16,8 @@ const planSchema = new Schema<TPlan>({
     oneTimePayment: { type: Boolean, default: false },
     billingInterval: {
         type: String,
-        enum: ["week", "month", "year"],
-        default: "month",
+        enum: ["free", "month", "year"],
+        default: "free",
     },
     description: { type: String, default: "" },
 }, { timestamps: true });
