@@ -1,0 +1,113 @@
+{
+  "common": {
+    "success": "成功",
+    "error": "エラー",
+    "loading": "読み込み中",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "update": "更新",
+    "create": "作成",
+    "remove": "削除",
+    "confirm": "確認",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "auth": {
+    "login_successful": "ログインに成功しました",
+    "logout_successful": "ログアウトに成功しました",
+    "invalid_credentials": "メールアドレスまたはパスワードが無効です",
+    "account_blocked": "アカウントがブロックされています",
+    "otp_sent": "OTPがメールに送信されました",
+    "otp_verified": "OTPの認証に成功しました",
+    "invalid_otp": "無効なOTPです",
+    "password_changed": "パスワードが正常に変更されました",
+    "unauthorized": "アクセスが許可されていません",
+    "token_expired": "トークンの有効期限が切れています"
+  },
+  "user": {
+    "profile_updated": "プロフィールが正常に更新されました",
+    "user_created": "ユーザーが正常に作成されました",
+    "user_deleted": "ユーザーが正常に削除されました",
+    "user_not_found": "ユーザーが見つかりません",
+    "invalid_user_data": "無効なユーザーデータです",
+    "friend_added": "友達が正常に追加されました",
+    "friend_removed": "友達が正常に削除されました",
+    "friend_already_exists": "友達は既に存在します",
+    "friend_not_found": "友達が見つかりません"
+  },
+  "transaction": {
+    "transaction_created": "取引が正常に作成されました",
+    "transaction_updated": "取引が正常に更新されました",
+    "transaction_deleted": "取引が正常に削除されました",
+    "transaction_not_found": "取引が見つかりません",
+    "insufficient_balance": "残高が不足しています",
+    "invalid_amount": "無効な金額です",
+    "currency_converted": "金額が希望の通貨に変換されました"
+  },
+  "group": {
+    "group_created": "グループが正常に作成されました",
+    "group_updated": "グループが正常に更新されました",
+    "group_deleted": "グループが正常に削除されました",
+    "group_not_found": "グループが見つかりません",
+    "groups_fetched": "グループが正常に取得されました",
+    "member_added": "メンバーがグループに正常に追加されました",
+    "member_removed": "メンバーがグループから正常に削除されました",
+    "debt_settled": "この操作を実行する前にすべての借金を清算する必要があります",
+    "only_owner_can_delete": "グループの所有者のみがグループを削除できます",
+    "expense_added": "支出がグループに正常に追加されました",
+    "group_name_updated": "グループ名が正常に更新されました"
+  },
+  "payment": {
+    "payment_successful": "支払いが正常に処理されました",
+    "payment_failed": "支払いに失敗しました",
+    "subscription_activated": "サブスクリプションが正常にアクティベートされました",
+    "subscription_cancelled": "サブスクリプションがキャンセルされました",
+    "invalid_payment_method": "無効な支払い方法です",
+    "payment_required": "続行するには支払いが必要です"
+  },
+  "validation": {
+    "required_field": "このフィールドは必須です",
+    "invalid_email": "無効なメール形式です",
+    "password_too_short": "パスワードは最低8文字必要です",
+    "invalid_phone": "無効な電話番号形式です",
+    "invalid_currency": "選択された通貨が無効です",
+    "invalid_language": "選択された言語が無効です",
+    "amount_must_be_positive": "金額は正の数である必要があります",
+    "name_too_short": "名前は最低2文字必要です",
+    "name_too_long": "名前は100文字を超えることはできません"
+  },
+  "currency": {
+    "usd": "アメリカドル",
+    "eur": "ユーロ",
+    "sgd": "シンガポールドル",
+    "gbp": "イギリスポンド",
+    "aud": "オーストラリアドル",
+    "converted_from": "{from}から{to}に変換されました",
+    "exchange_rate_updated": "為替レートが更新されました",
+    "currency_changed": "通貨設定が更新されました"
+  },
+  "financial": {
+    "you_owe": "あなたが支払う金額",
+    "you_are_owed": "あなたが受け取る金額", 
+    "settled": "清算済み",
+    "total_expenses": "総支出",
+    "net_balance": "純残高",
+    "currency_converted_note": "金額は{currency}に変換されています"
+  },
+  "financial_status": {
+    "you_owe": "あなたが借りています",
+    "you_are_owed": "あなたが貸しています",
+    "settled": "清算済み",
+    "even": "均等"
+  },
+  "errors": {
+    "server_error": "内部サーバーエラー",
+    "not_found": "リソースが見つかりません",
+    "bad_request": "不正なリクエスト",
+    "forbidden": "アクセスが禁止されています",
+    "validation_failed": "検証に失敗しました",
+    "database_error": "データベースエラーが発生しました"
+  }
+}

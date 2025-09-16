@@ -1043,6 +1043,226 @@ const getGroupTransactions = async ({
     }
 };
 
+// Delete group with debt settlement validation
+const deleteGroup = async (groupId: string, userEmail: string) => {
+    try {
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        // Check if user is the owner
+        if (group.ownerEmail !== userEmail) {
+            throw new Error('Only the group owner can delete the group');
+        }
+
+        // Check if group has any expenses
+        if (group.groupExpenses && group.groupExpenses.length > 0) {
+            // Calculate current balances to check if all debts are settled
+            const balances = await calculateGroupBalances(groupId);
+            
+            // Check if any member has outstanding debt (net balance is not 0)
+            const unsettledMembers = Object.entries(balances).filter(([_, balance]) => {
+                return Math.abs(balance.net) > 0.01; // Allow for small rounding differences
+            });
+
+            if (unsettledMembers.length > 0) {
+                const debtDetails = unsettledMembers.map(([email, balance]) => ({
+                    memberEmail: email,
+                    amount: balance.net,
+                    status: balance.net > 0 ? 'is_owed' : 'owes'
+                }));
+
+                throw new Error(`Cannot delete group. Outstanding debts found. All debts must be settled before deletion. Unsettled members: ${debtDetails.map(d => `${d.memberEmail} ${d.status} ${Math.abs(d.amount)}`).join(', ')}`);
+            }
+        }
+
+        // All conditions met, proceed with deletion
+        const deletedGroup = await GroupTransactionModel.findOneAndDelete({ groupId: parseInt(groupId) });
+
+        if (!deletedGroup) {
+            throw new Error('Failed to delete group');
+        }
+
+        return {
+            message: 'Group deleted successfully',
+            deletedGroup: {
+                groupId: deletedGroup.groupId,
+                groupName: deletedGroup.groupName,
+                memberCount: (deletedGroup.groupMembers?.length || 0) + 1,
+                expenseCount: deletedGroup.groupExpenses?.length || 0
+            }
+        };
+
+    } catch (error: any) {
+        console.error('Error in deleteGroup service:', error.message);
+        throw new Error(`Failed to delete group: ${error.message}`);
+    }
+};
+
+// Remove member from group with debt settlement validation
+const removeMemberFromGroup = async (groupId: string, memberEmail: string, requestingUserEmail: string) => {
+    try {
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        // Check if requesting user has permission (owner or the member themselves)
+        const isOwner = group.ownerEmail === requestingUserEmail;
+        const isSelfLeaving = memberEmail === requestingUserEmail;
+
+        if (!isOwner && !isSelfLeaving) {
+            throw new Error('You can only remove yourself or, if you are the owner, remove other members');
+        }
+
+        // Check if member exists in the group
+        const isMemberInGroup = group.groupMembers?.includes(memberEmail);
+        const isOwnerLeaving = group.ownerEmail === memberEmail;
+
+        if (!isMemberInGroup && !isOwnerLeaving) {
+            throw new Error('Member is not part of this group');
+        }
+
+        // Owner cannot leave the group unless they are the only member
+        if (isOwnerLeaving && group.groupMembers && group.groupMembers.length > 0) {
+            throw new Error('Group owner cannot leave while there are other members. Transfer ownership or remove all members first');
+        }
+
+        // Check if group has expenses and validate debts/involvement
+        if (group.groupExpenses && group.groupExpenses.length > 0) {
+            // Calculate current balances
+            const balances = await calculateGroupBalances(groupId);
+            const memberBalance = balances[memberEmail];
+
+            if (memberBalance) {
+                // Check if member has unsettled debt
+                if (Math.abs(memberBalance.net) > 0.01) {
+                    throw new Error(`Cannot remove member. ${memberEmail} has unsettled debt of ${memberBalance.net > 0 ? 'is owed' : 'owes'} ${Math.abs(memberBalance.net)}. All debts must be settled before removal`);
+                }
+            }
+
+            // Check if member is involved in any expenses (as payer or part of sharing)
+            const isInvolvedInExpenses = group.groupExpenses.some(expense => {
+                // Check if member paid for any expense
+                const isPayer = expense.paidBy.type === 'individual' 
+                    ? expense.paidBy.memberEmail === memberEmail
+                    : expense.paidBy.payments?.some(payment => payment.memberEmail === memberEmail);
+
+                // Check if member is part of any expense sharing
+                const isPartOfSharing = expense.shareWith.type === 'equal'
+                    ? expense.shareWith.members.includes(memberEmail)
+                    : expense.shareWith.shares?.some(share => share.memberEmail === memberEmail);
+
+                return isPayer || isPartOfSharing;
+            });
+
+            if (isInvolvedInExpenses) {
+                throw new Error(`Cannot remove member. ${memberEmail} is still part of shared expenses. All shared expenses involving this member must be resolved first`);
+            }
+        }
+
+        // All validations passed, proceed with removal
+        let updatedGroup;
+        
+        if (isOwnerLeaving) {
+            // If owner is leaving and no other members, delete the group
+            updatedGroup = await GroupTransactionModel.findOneAndDelete({ groupId: parseInt(groupId) });
+            return {
+                message: 'Owner left the group. Group has been deleted as it had no other members',
+                action: 'group_deleted',
+                groupDeleted: true,
+                removedMember: memberEmail
+            };
+        } else {
+            // Remove member from groupMembers array
+            updatedGroup = await GroupTransactionModel.findOneAndUpdate(
+                { groupId: parseInt(groupId) },
+                { $pull: { groupMembers: memberEmail } },
+                { new: true }
+            );
+        }
+
+        if (!updatedGroup) {
+            throw new Error('Failed to remove member from group');
+        }
+
+        return {
+            message: `${isSelfLeaving ? 'You have' : 'Member has been'} successfully ${isSelfLeaving ? 'left' : 'removed from'} the group`,
+            action: 'member_removed',
+            groupDeleted: false,
+            removedMember: memberEmail,
+            group: {
+                groupId: updatedGroup.groupId,
+                groupName: updatedGroup.groupName,
+                remainingMembers: (updatedGroup.groupMembers?.length || 0) + 1 // +1 for owner
+            }
+        };
+
+    } catch (error: any) {
+        console.error('Error in removeMemberFromGroup service:', error.message);
+        throw new Error(`Failed to remove member: ${error.message}`);
+    }
+};
+
+// Update group name
+const updateGroupName = async (groupId: string, newGroupName: string, userEmail: string) => {
+    try {
+        // Validate input
+        if (!newGroupName || newGroupName.trim().length === 0) {
+            throw new Error('Group name is required and cannot be empty');
+        }
+
+        if (newGroupName.trim().length > 100) {
+            throw new Error('Group name cannot exceed 100 characters');
+        }
+
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        // Check if user is the owner (only owner can update group name)
+        if (group.ownerEmail !== userEmail) {
+            throw new Error('Only the group owner can update the group name');
+        }
+
+        // Check if the new name is different from current name
+        if (group.groupName.trim() === newGroupName.trim()) {
+            throw new Error('New group name must be different from the current name');
+        }
+
+        // Update the group name
+        const updatedGroup = await GroupTransactionModel.findOneAndUpdate(
+            { groupId: parseInt(groupId) },
+            { $set: { groupName: newGroupName.trim() } },
+            { new: true }
+        );
+
+        if (!updatedGroup) {
+            throw new Error('Failed to update group name');
+        }
+
+        return {
+            message: 'Group name updated successfully',
+            group: {
+                groupId: updatedGroup.groupId,
+                groupName: updatedGroup.groupName,
+                ownerEmail: updatedGroup.ownerEmail,
+                memberCount: (updatedGroup.groupMembers?.length || 0) + 1,
+                expenseCount: updatedGroup.groupExpenses?.length || 0
+            }
+        };
+
+    } catch (error: any) {
+        console.error('Error in updateGroupName service:', error.message);
+        throw new Error(`Failed to update group name: ${error.message}`);
+    }
+};
+
 const groupTransactionServices = {
     createGroupTransaction,
     addGroupMember,
@@ -1052,7 +1272,10 @@ const groupTransactionServices = {
     getGroupStatus,
     calculateGroupBalances,
     getGroupSummary,
-    settleDebt
+    settleDebt,
+    deleteGroup,
+    removeMemberFromGroup,
+    updateGroupName
 };
 
 export default groupTransactionServices;

@@ -1,0 +1,112 @@
+{
+  "common": {
+    "success": "Berjaya",
+    "error": "Ralat",
+    "loading": "Memuat",
+    "save": "Simpan",
+    "cancel": "Batal",
+    "delete": "Padam",
+    "edit": "Edit",
+    "update": "Kemas kini",
+    "create": "Cipta",
+    "remove": "Buang",
+    "confirm": "Sahkan",
+    "yes": "Ya",
+    "no": "Tidak"
+  },
+  "auth": {
+    "login_successful": "Log masuk berjaya",
+    "logout_successful": "Log keluar berjaya",
+    "invalid_credentials": "E-mel atau kata laluan tidak sah",
+    "account_blocked": "Akaun anda telah disekat",
+    "otp_sent": "OTP telah dihantar ke e-mel anda",
+    "otp_verified": "OTP berjaya disahkan",
+    "invalid_otp": "OTP tidak sah",
+    "password_changed": "Kata laluan berjaya ditukar",
+    "unauthorized": "Akses tidak dibenarkan",
+    "token_expired": "Token telah tamat tempoh"
+  },
+  "user": {
+    "profile_updated": "Profil berjaya dikemas kini",
+    "user_created": "Pengguna berjaya dicipta",
+    "user_deleted": "Pengguna berjaya dipadam",
+    "user_not_found": "Pengguna tidak dijumpai",
+    "invalid_user_data": "Data pengguna tidak sah",
+    "friend_added": "Rakan berjaya ditambah",
+    "friend_removed": "Rakan berjaya dibuang",
+    "friend_already_exists": "Rakan sudah wujud",
+    "friend_not_found": "Rakan tidak dijumpai"
+  },
+  "transaction": {
+    "transaction_created": "Transaksi berjaya dicipta",
+    "transaction_updated": "Transaksi berjaya dikemas kini",
+    "transaction_deleted": "Transaksi berjaya dipadam",
+    "transaction_not_found": "Transaksi tidak dijumpai",
+    "insufficient_balance": "Baki tidak mencukupi",
+    "invalid_amount": "Jumlah tidak sah",
+    "currency_converted": "Jumlah ditukar kepada mata wang pilihan anda"
+  },
+  "group": {
+    "group_created": "Kumpulan berjaya dicipta",
+    "group_updated": "Kumpulan berjaya dikemas kini",
+    "group_deleted": "Kumpulan berjaya dipadam",
+    "group_not_found": "Kumpulan tidak dijumpai",
+    "member_added": "Ahli berjaya ditambah ke kumpulan",
+    "member_removed": "Ahli berjaya dibuang dari kumpulan",
+    "debt_settled": "Semua hutang mesti diselesaikan sebelum tindakan ini",
+    "only_owner_can_delete": "Hanya pemilik kumpulan boleh memadam kumpulan",
+    "expense_added": "Perbelanjaan berjaya ditambah ke kumpulan",
+    "group_name_updated": "Nama kumpulan berjaya dikemas kini"
+  },
+  "payment": {
+    "payment_successful": "Pembayaran berjaya diproses",
+    "payment_failed": "Pembayaran gagal",
+    "subscription_activated": "Langganan berjaya diaktifkan",
+    "subscription_cancelled": "Langganan dibatalkan",
+    "invalid_payment_method": "Kaedah pembayaran tidak sah",
+    "payment_required": "Pembayaran diperlukan untuk meneruskan"
+  },
+  "validation": {
+    "required_field": "Medan ini diperlukan",
+    "invalid_email": "Format e-mel tidak sah",
+    "password_too_short": "Kata laluan mestilah sekurang-kurangnya 8 aksara",
+    "invalid_phone": "Format nombor telefon tidak sah",
+    "invalid_currency": "Mata wang yang dipilih tidak sah",
+    "invalid_language": "Bahasa yang dipilih tidak sah",
+    "amount_must_be_positive": "Jumlah mestilah positif",
+    "name_too_short": "Nama mestilah sekurang-kurangnya 2 aksara",
+    "name_too_long": "Nama tidak boleh melebihi 100 aksara"
+  },
+  "currency": {
+    "usd": "Dolar AS",
+    "eur": "Euro",
+    "sgd": "Dolar Singapura",
+    "gbp": "Pound British",
+    "aud": "Dolar Australia",
+    "converted_from": "Ditukar dari {from} kepada {to}",
+    "exchange_rate_updated": "Kadar pertukaran dikemas kini",
+    "currency_changed": "Pilihan mata wang dikemas kini"
+  },
+  "financial": {
+    "you_owe": "Anda berhutang",
+    "you_are_owed": "Anda dipinjam",
+    "settled": "Diselesaikan",
+    "total_expenses": "Jumlah perbelanjaan",
+    "net_balance": "Baki bersih",
+    "currency_converted_note": "Jumlah ditukar kepada {currency}"
+  },
+  "financial_status": {
+    "you_owe": "anda berhutang",
+    "you_are_owed": "anda dipinjam",
+    "settled": "diselesaikan",
+    "even": "seimbang"
+  },
+  "errors": {
+    "server_error": "Ralat pelayan dalaman",
+    "not_found": "Sumber tidak dijumpai",
+    "bad_request": "Permintaan buruk",
+    "forbidden": "Akses dilarang",
+    "validation_failed": "Pengesahan gagal",
+    "database_error": "Ralat pangkalan data berlaku"
+  }
+}

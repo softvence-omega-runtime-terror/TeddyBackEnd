@@ -1,0 +1,113 @@
+{
+  "common": {
+    "success": "Berhasil",
+    "error": "Kesalahan",
+    "loading": "Memuat",
+    "save": "Simpan",
+    "cancel": "Batal",
+    "delete": "Hapus",
+    "edit": "Edit",
+    "update": "Perbarui",
+    "create": "Buat",
+    "remove": "Hapus",
+    "confirm": "Konfirmasi",
+    "yes": "Ya",
+    "no": "Tidak"
+  },
+  "auth": {
+    "login_successful": "Login berhasil",
+    "logout_successful": "Logout berhasil",
+    "invalid_credentials": "Email atau password tidak valid",
+    "account_blocked": "Akun Anda telah diblokir",
+    "otp_sent": "OTP telah dikirim ke email Anda",
+    "otp_verified": "OTP berhasil diverifikasi",
+    "invalid_otp": "OTP tidak valid",
+    "password_changed": "Password berhasil diubah",
+    "unauthorized": "Akses tidak diizinkan",
+    "token_expired": "Token telah kedaluwarsa"
+  },
+  "user": {
+    "profile_updated": "Profil berhasil diperbarui",
+    "user_created": "Pengguna berhasil dibuat",
+    "user_deleted": "Pengguna berhasil dihapus",
+    "user_not_found": "Pengguna tidak ditemukan",
+    "invalid_user_data": "Data pengguna tidak valid",
+    "friend_added": "Teman berhasil ditambahkan",
+    "friend_removed": "Teman berhasil dihapus",
+    "friend_already_exists": "Teman sudah ada",
+    "friend_not_found": "Teman tidak ditemukan"
+  },
+  "transaction": {
+    "transaction_created": "Transaksi berhasil dibuat",
+    "transaction_updated": "Transaksi berhasil diperbarui",
+    "transaction_deleted": "Transaksi berhasil dihapus",
+    "transaction_not_found": "Transaksi tidak ditemukan",
+    "transactions_fetched": "Transaksi berhasil diambil",
+    "insufficient_balance": "Saldo tidak mencukupi",
+    "invalid_amount": "Jumlah tidak valid",
+    "currency_converted": "Jumlah dikonversi ke mata uang pilihan Anda"
+  },
+  "group": {
+    "group_created": "Grup berhasil dibuat",
+    "group_updated": "Grup berhasil diperbarui",
+    "group_deleted": "Grup berhasil dihapus",
+    "group_not_found": "Grup tidak ditemukan",
+    "member_added": "Anggota berhasil ditambahkan ke grup",
+    "member_removed": "Anggota berhasil dihapus dari grup",
+    "debt_settled": "Semua hutang harus diselesaikan sebelum tindakan ini",
+    "only_owner_can_delete": "Hanya pemilik grup yang dapat menghapus grup",
+    "expense_added": "Pengeluaran berhasil ditambahkan ke grup",
+    "group_name_updated": "Nama grup berhasil diperbarui"
+  },
+  "payment": {
+    "payment_successful": "Pembayaran berhasil diproses",
+    "payment_failed": "Pembayaran gagal",
+    "subscription_activated": "Langganan berhasil diaktifkan",
+    "subscription_cancelled": "Langganan dibatalkan",
+    "invalid_payment_method": "Metode pembayaran tidak valid",
+    "payment_required": "Pembayaran diperlukan untuk melanjutkan"
+  },
+  "validation": {
+    "required_field": "Kolom ini wajib diisi",
+    "invalid_email": "Format email tidak valid",
+    "password_too_short": "Password harus minimal 8 karakter",
+    "invalid_phone": "Format nomor telepon tidak valid",
+    "invalid_currency": "Mata uang yang dipilih tidak valid",
+    "invalid_language": "Bahasa yang dipilih tidak valid",
+    "amount_must_be_positive": "Jumlah harus positif",
+    "name_too_short": "Nama harus minimal 2 karakter",
+    "name_too_long": "Nama tidak boleh melebihi 100 karakter"
+  },
+  "currency": {
+    "usd": "Dolar AS",
+    "eur": "Euro",
+    "sgd": "Dolar Singapura",
+    "gbp": "Pound Inggris",
+    "aud": "Dolar Australia",
+    "converted_from": "Dikonversi dari {from} ke {to}",
+    "exchange_rate_updated": "Nilai tukar diperbarui",
+    "currency_changed": "Preferensi mata uang diperbarui"
+  },
+  "financial": {
+    "you_owe": "Anda berhutang",
+    "you_are_owed": "Anda diutangi",
+    "settled": "Lunas",
+    "total_expenses": "Total pengeluaran",
+    "net_balance": "Saldo bersih",
+    "currency_converted_note": "Jumlah dikonversi ke {currency}"
+  },
+  "financial_status": {
+    "you_owe": "Anda berhutang",
+    "you_are_owed": "Anda diutangi",
+    "settled": "lunas",
+    "even": "seimbang"
+  },
+  "errors": {
+    "server_error": "Kesalahan server internal",
+    "not_found": "Sumber daya tidak ditemukan",
+    "bad_request": "Permintaan buruk",
+    "forbidden": "Akses dilarang",
+    "validation_failed": "Validasi gagal",
+    "database_error": "Kesalahan database terjadi"
+  }
+}

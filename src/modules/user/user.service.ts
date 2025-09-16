@@ -370,8 +370,6 @@ const updateUserByAdmin = async (
   userId: Types.ObjectId,
   payload: Partial<TUser>,
 ) => {
-  console.log('Received userId:', userId.toString());
-  console.log('Received payload:', payload);
 
   if (payload.isBlocked === true) {
     payload.isLoggedIn = false;
@@ -386,7 +384,6 @@ const updateUserByAdmin = async (
     throw new Error('User not found or update failed');
   }
 
-  console.log('Updated user:', updatedUser);
   return updatedUser;
 };
 

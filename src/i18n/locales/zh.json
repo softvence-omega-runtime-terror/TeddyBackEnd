@@ -1,0 +1,112 @@
+{
+  "common": {
+    "success": "成功",
+    "error": "错误",
+    "loading": "加载中",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "update": "更新",
+    "create": "创建",
+    "remove": "移除",
+    "confirm": "确认",
+    "yes": "是",
+    "no": "否"
+  },
+  "auth": {
+    "login_successful": "登录成功",
+    "logout_successful": "退出成功",
+    "invalid_credentials": "邮箱或密码无效",
+    "account_blocked": "您的账户已被封禁",
+    "otp_sent": "验证码已发送到您的邮箱",
+    "otp_verified": "验证码验证成功",
+    "invalid_otp": "无效的验证码",
+    "password_changed": "密码修改成功",
+    "unauthorized": "未授权访问",
+    "token_expired": "令牌已过期"
+  },
+  "user": {
+    "profile_updated": "个人资料更新成功",
+    "user_created": "用户创建成功",
+    "user_deleted": "用户删除成功",
+    "user_not_found": "用户不存在",
+    "invalid_user_data": "无效的用户数据",
+    "friend_added": "好友添加成功",
+    "friend_removed": "好友移除成功",
+    "friend_already_exists": "好友已存在",
+    "friend_not_found": "好友不存在"
+  },
+  "transaction": {
+    "transaction_created": "交易创建成功",
+    "transaction_updated": "交易更新成功",
+    "transaction_deleted": "交易删除成功",
+    "transaction_not_found": "交易不存在",
+    "insufficient_balance": "余额不足",
+    "invalid_amount": "无效金额",
+    "currency_converted": "金额已转换为您的首选货币"
+  },
+  "group": {
+    "group_created": "群组创建成功",
+    "group_updated": "群组更新成功",
+    "group_deleted": "群组删除成功",
+    "group_not_found": "群组不存在",
+    "member_added": "成员已成功添加到群组",
+    "member_removed": "成员已从群组中移除",
+    "debt_settled": "执行此操作前必须清偿所有债务",
+    "only_owner_can_delete": "只有群组所有者可以删除群组",
+    "expense_added": "支出已成功添加到群组",
+    "group_name_updated": "群组名称更新成功"
+  },
+  "payment": {
+    "payment_successful": "支付处理成功",
+    "payment_failed": "支付失败",
+    "subscription_activated": "订阅激活成功",
+    "subscription_cancelled": "订阅已取消",
+    "invalid_payment_method": "无效的支付方式",
+    "payment_required": "需要支付以继续"
+  },
+  "validation": {
+    "required_field": "此字段为必填项",
+    "invalid_email": "无效的邮箱格式",
+    "password_too_short": "密码至少需要8个字符",
+    "invalid_phone": "无效的电话号码格式",
+    "invalid_currency": "选择的货币无效",
+    "invalid_language": "选择的语言无效",
+    "amount_must_be_positive": "金额必须为正数",
+    "name_too_short": "姓名至少需要2个字符",
+    "name_too_long": "姓名不能超过100个字符"
+  },
+  "currency": {
+    "usd": "美元",
+    "eur": "欧元",
+    "sgd": "新加坡元",
+    "gbp": "英镑",
+    "aud": "澳元",
+    "converted_from": "从{from}转换为{to}",
+    "exchange_rate_updated": "汇率已更新",
+    "currency_changed": "货币偏好已更新"
+  },
+  "financial": {
+    "you_owe": "您欠款",
+    "you_are_owed": "您被欠款",
+    "settled": "已结清",
+    "total_expenses": "总支出",
+    "net_balance": "净余额",
+    "currency_converted_note": "金额已转换为{currency}"
+  },
+  "financial_status": {
+    "you_owe": "您欠款",
+    "you_are_owed": "您被欠款",
+    "settled": "已结清",
+    "even": "平衡"
+  },
+  "errors": {
+    "server_error": "内部服务器错误",
+    "not_found": "资源未找到",
+    "bad_request": "错误的请求",
+    "forbidden": "访问被禁止",
+    "validation_failed": "验证失败",
+    "database_error": "数据库错误"
+  }
+}

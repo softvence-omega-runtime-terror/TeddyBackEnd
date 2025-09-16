@@ -1,0 +1,114 @@
+{
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "loading": "Loading",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "update": "Update",
+    "create": "Create",
+    "remove": "Remove",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "auth": {
+    "login_successful": "Login successful",
+    "logout_successful": "Logout successful",
+    "invalid_credentials": "Invalid email or password",
+    "account_blocked": "Your account has been blocked",
+    "otp_sent": "OTP has been sent to your email",
+    "otp_verified": "OTP verified successfully",
+    "invalid_otp": "Invalid OTP",
+    "password_changed": "Password changed successfully",
+    "unauthorized": "Access not authorized",
+    "token_expired": "Token has expired"
+  },
+  "user": {
+    "profile_updated": "Profile updated successfully",
+    "user_created": "User created successfully",
+    "user_deleted": "User deleted successfully",
+    "user_not_found": "User not found",
+    "invalid_user_data": "Invalid user data",
+    "friend_added": "Friend added successfully",
+    "friend_removed": "Friend removed successfully",
+    "friend_already_exists": "Friend already exists",
+    "friend_not_found": "Friend not found"
+  },
+  "transaction": {
+    "transaction_created": "Transaction created successfully",
+    "transaction_updated": "Transaction updated successfully",
+    "transaction_deleted": "Transaction deleted successfully",
+    "transaction_not_found": "Transaction not found",
+    "transactions_fetched": "Transactions fetched successfully",
+    "insufficient_balance": "Insufficient balance",
+    "invalid_amount": "Invalid amount",
+    "currency_converted": "Amount converted to your preferred currency"
+  },
+  "group": {
+    "group_created": "Group created successfully",
+    "group_updated": "Group updated successfully",
+    "group_deleted": "Group deleted successfully",
+    "group_not_found": "Group not found",
+    "groups_fetched": "Groups retrieved successfully",
+    "member_added": "Member added to group successfully",
+    "member_removed": "Member removed from group successfully",
+    "debt_settled": "All debts must be settled before this action",
+    "only_owner_can_delete": "Only group owner can delete the group",
+    "expense_added": "Expense added to group successfully",
+    "group_name_updated": "Group name updated successfully"
+  },
+  "payment": {
+    "payment_successful": "Payment processed successfully",
+    "payment_failed": "Payment failed",
+    "subscription_activated": "Subscription activated successfully",
+    "subscription_cancelled": "Subscription cancelled",
+    "invalid_payment_method": "Invalid payment method",
+    "payment_required": "Payment required to continue"
+  },
+  "validation": {
+    "required_field": "This field is required",
+    "invalid_email": "Invalid email format",
+    "password_too_short": "Password must be at least 8 characters",
+    "invalid_phone": "Invalid phone number format",
+    "invalid_currency": "Selected currency is invalid",
+    "invalid_language": "Selected language is invalid",
+    "amount_must_be_positive": "Amount must be positive",
+    "name_too_short": "Name must be at least 2 characters",
+    "name_too_long": "Name cannot exceed 100 characters"
+  },
+  "currency": {
+    "usd": "US Dollar",
+    "eur": "Euro",
+    "sgd": "Singapore Dollar",
+    "gbp": "British Pound",
+    "aud": "Australian Dollar",
+    "converted_from": "Converted from {from} to {to}",
+    "exchange_rate_updated": "Exchange rate updated",
+    "currency_changed": "Currency preference updated"
+  },
+  "financial": {
+    "you_owe": "You owe",
+    "you_are_owed": "You are owed",
+    "settled": "Settled",
+    "total_expenses": "Total expenses",
+    "net_balance": "Net balance",
+    "currency_converted_note": "Amounts converted to {currency}"
+  },
+  "financial_status": {
+    "you_owe": "you owe",
+    "you_are_owed": "you are owed",
+    "settled": "settled",
+    "even": "even"
+  },
+  "errors": {
+    "server_error": "Internal server error",
+    "not_found": "Resource not found",
+    "bad_request": "Bad request",
+    "forbidden": "Access forbidden",
+    "validation_failed": "Validation failed",
+    "database_error": "Database error occurred"
+  }
+}

@@ -30,7 +30,7 @@ export async function getMonthlyReport(userId: string, query: any) {
     {
       $addFields: {
         dateObj: {
-          $dateFromString: { dateString: '$date', timezone: '+06:00' },
+          $dateFromString: { dateString: '$date' },
         },
       },
     },
@@ -46,10 +46,23 @@ export async function getMonthlyReport(userId: string, query: any) {
           { $group: { _id: '$transactionType', total: { $sum: '$amount' } } },
         ],
         byCategory: [
-          { $match: { typeName: { $ne: null, $exists: true } } },
+          {
+            $lookup: {
+              from: 'categories',
+              localField: 'type_id',
+              foreignField: '_id',
+              as: 'categoryInfo'
+            }
+          },
+          {
+            $unwind: {
+              path: '$categoryInfo',
+              preserveNullAndEmptyArrays: false
+            }
+          },
           {
             $group: {
-              _id: '$typeName',
+              _id: '$categoryInfo.name',
               transactionType: { $first: '$transactionType' },
               total: { $sum: '$amount' },
             },
