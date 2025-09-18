@@ -2050,11 +2050,25 @@ const getFilteredIncomeAndExpenses = async (
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const formattedMonths = availableMonths.map(m => `${monthNames[m._id.month - 1]} ${m._id.year}`);
 
+  // Get current date information for currentDate field
+  const currentDate = new Date();
+  const currentMonthName = monthNames[currentDate.getMonth()];
+  const currentYear = currentDate.getFullYear();
+  const currentDateString = `${currentMonthName} ${currentYear}`;
+
+  // Determine which month's data is being displayed
+  const displayedDate = filters?.month || currentDateString;
+
   return {
     totalIncome: Number(totalIncome) || 0,
     totalExpenses: Number(totalExpenses) || 0,
     remainingBalance: Number(remainingBalance) || 0,
     currency: userPreferredCurrency, // Add user's preferred currency
+    profileDate: {
+      startDate: userProfile?.startDate || null,
+      endDate: userProfile?.endDate || null
+    },
+    currentDate: displayedDate, // Shows which month's data is currently displayed
     // transactionsList: transactionsList || [],
     groupedByDate, // Date-wise grouped transactions with per-day totals
     availableMonths: formattedMonths,

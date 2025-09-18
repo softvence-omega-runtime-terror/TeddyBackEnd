@@ -42,7 +42,7 @@ incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), income
 incomeAndExpenseRouter.post("/getAllIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getAllIncomeAndExpenses )
 
 // New filtered API
-incomeAndExpenseRouter.post("/getFilteredIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getFilteredIncomeAndExpenses )
+incomeAndExpenseRouter.get("/getFilteredIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getFilteredIncomeAndExpenses )
 
 // Analytics Dashboard API
 incomeAndExpenseRouter.post("/getAnalyticsDashboard", auth([userRole.user]), incomeAndExpensesController.getAnalyticsDashboard )

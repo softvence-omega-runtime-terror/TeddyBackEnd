@@ -336,7 +336,7 @@ const getFilteredIncomeAndExpenses = catchAsync(async (req, res) => {
   const user_id = idConverter(userId as string) as Types.ObjectId;
   const userEmail = req.user.email as string | undefined;
 
-  // Extract filter options from request body
+  // Extract filter options from request query parameters
   const {
     balanceOverview, // "totalRemaining" | "totalExpense" | "totalIncome"
     transactionType, // "all" | "expense" | "income"
@@ -346,20 +346,20 @@ const getFilteredIncomeAndExpenses = catchAsync(async (req, res) => {
     searchText, // Optional search in description
     sortBy, // "date" | "amount"
     sortOrder // "asc" | "desc"
-  } = req.body;
+  } = req.query;
 
   const result = await incomeAndExpensesService.getFilteredIncomeAndExpenses(
     user_id,
     userEmail,
     {
-      balanceOverview,
-      transactionType,
-      month,
-      type_id: type_id ? (idConverter(type_id) ?? undefined) : undefined,
-      group_id: group_id ? (idConverter(group_id) ?? undefined) : undefined,
-      searchText,
-      sortBy: sortBy || 'date',
-      sortOrder: sortOrder || 'desc'
+      balanceOverview: balanceOverview as "totalRemaining" | "totalExpense" | "totalIncome" | undefined,
+      transactionType: transactionType as "all" | "expense" | "income" | undefined,
+      month: month as string | undefined,
+      type_id: type_id ? (idConverter(type_id as string) ?? undefined) : undefined,
+      group_id: group_id ? (idConverter(group_id as string) ?? undefined) : undefined,
+      searchText: searchText as string | undefined,
+      sortBy: (sortBy as "date" | "amount") || 'date',
+      sortOrder: (sortOrder as "asc" | "desc") || 'desc'
     }
   );
 
