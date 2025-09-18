@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+/* import nodemailer from 'nodemailer';
 import config from '../config';
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
@@ -34,6 +34,49 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     return {
       success: false,
       error: 'Failed to send email',
+    };
+  }
+};
+ */
+
+
+import sgMail from '@sendgrid/mail';
+import config from '../config';
+
+// Set SendGrid API key
+sgMail.setApiKey(config.sendgrid_api_key);
+
+export const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    const msg = {
+      to,
+      from: {
+        email: config.company_email,
+        name: config.company_name || 'Your App Name'
+      },
+      subject,
+      html,
+      text: 'This E-mail is from APP NAME', // Optional: you can remove this or make it dynamic
+    };
+
+    const response = await sgMail.send(msg);
+    
+    console.log('✅ Email sent successfully:', response[0].statusCode);
+
+    return {
+      success: true,
+      statusCode: response[0].statusCode,
+      messageId: response[0].headers['x-message-id'],
+      accepted: [to],
+      rejected: [],
+    };
+  } catch (err: any) {
+    console.error('❌ SendGrid email sending failed:', err.response?.body || err.message);
+    
+    return {
+      success: false,
+      error: 'Failed to send email',
+      details: err.response?.body?.errors || err.message,
     };
   }
 };
