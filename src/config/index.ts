@@ -28,6 +28,8 @@ const config = {
   App_Download_Url:process.env.APP_DOWNLOAD_URL as string,
 };
 
+console.log("config",config);
+
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export default config;
