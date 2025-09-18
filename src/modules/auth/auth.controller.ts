@@ -60,6 +60,7 @@ const refreshToken = catchAsync(async (req, res) => {
 const forgetPassword = catchAsync(async (req, res) => {
   const email = req.body?.email;
   const result = await authServices.forgetPassword(email);
+  console.log(result);
   res.status(200).json({
     success: true,
     message: 'reset password token generated check your email',

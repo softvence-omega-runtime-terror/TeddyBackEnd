@@ -263,6 +263,7 @@ const refreshToken = async (refreshToken: string) => {
 
 const forgetPassword = async (email: string) => {
   const user = await UserModel.findOne({ email });
+  console.log('user in forget password service', user);
 
   if (!user) {
     throw new Error('User not found with this email');
@@ -283,7 +284,10 @@ const forgetPassword = async (email: string) => {
     config.otp_token_duration as string,
   );
 
+  console.log('resetToken', resetToken);
+
   const resetTokenSending = await reSend_OTP(resetToken);
+  console.log('resetTokenSending', resetTokenSending);
 
   if (!resetTokenSending) {
     throw Error('token sending failed');
