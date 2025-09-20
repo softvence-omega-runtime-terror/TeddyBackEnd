@@ -1263,6 +1263,75 @@ const updateGroupName = async (groupId: string, newGroupName: string, userEmail:
     }
 };
 
+// Get group members by group ID
+const getGroupMembers = async ({
+    groupId,
+    user_id
+}: {
+    groupId: string,
+    user_id: mongoose.Types.ObjectId | null
+}) => {
+    try {
+        // Get user email
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).lean();
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        // Verify user is member or owner
+        const isOwner = group.ownerEmail === userEmail;
+        const isMember = group.groupMembers?.includes(userEmail);
+
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to view group members');
+        }
+
+        // Prepare member list
+        const members = [];
+
+        // Add owner as first member
+        if (group.ownerEmail) {
+            members.push({
+                email: group.ownerEmail,
+                isOwner: true
+            });
+        }
+
+        // Add other members
+        if (group.groupMembers && group.groupMembers.length > 0) {
+            for (const memberEmail of group.groupMembers) {
+                members.push({
+                    email: memberEmail,
+                    isOwner: false
+                });
+            }
+        }
+
+        return {
+            groupId: group.groupId,
+            groupName: group.groupName,
+            owner: {
+                email: group.ownerEmail,
+                isOwner: true
+            },
+            members: members,
+            totalMembers: members.length
+        };
+
+    } catch (error: any) {
+        console.error('Error in getGroupMembers service:', error.message);
+        throw new Error(`Failed to get group members: ${error.message}`);
+    }
+};
+
 const groupTransactionServices = {
     createGroupTransaction,
     addGroupMember,
@@ -1275,7 +1344,8 @@ const groupTransactionServices = {
     settleDebt,
     deleteGroup,
     removeMemberFromGroup,
-    updateGroupName
+    updateGroupName,
+    getGroupMembers
 };
 
 export default groupTransactionServices;

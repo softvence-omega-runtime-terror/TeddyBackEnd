@@ -430,6 +430,94 @@ groupTransactionRouter.get('/getGroupDetails/:groupId', auth([userRole.user]), l
 
 /**
  * @swagger
+ * /group-transactions/getGroupMembers/{groupId}:
+ *   get:
+ *     summary: Get all members of a specific group
+ *     tags: [Group Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The group ID
+ *     responses:
+ *       200:
+ *         description: Group members retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     groupId:
+ *                       type: number
+ *                       example: 123
+ *                     groupName:
+ *                       type: string
+ *                       example: "Bangkok Trip"
+ *                     owner:
+ *                       type: object
+ *                       properties:
+ *                         email:
+ *                           type: string
+ *                           example: "owner@example.com"
+ *                         isOwner:
+ *                           type: boolean
+ *                           example: true
+ *                     members:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           email:
+ *                             type: string
+ *                             example: "member@example.com"
+ *                           isOwner:
+ *                             type: boolean
+ *                             example: false
+ *                     totalMembers:
+ *                       type: number
+ *                       example: 5
+ *                 message:
+ *                   type: string
+ *                   example: Group members retrieved successfully
+ *       400:
+ *         description: Bad request - Invalid group ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - User not authorized to view group members
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Group not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+groupTransactionRouter.get('/getGroupMembers/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.getGroupMembers);
+
+/**
+ * @swagger
  * /api/v1/groupTransaction/deleteGroup/{groupId}:
  *   delete:
  *     summary: Delete a group

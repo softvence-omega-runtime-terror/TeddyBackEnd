@@ -315,6 +315,35 @@ const getGroupDetails = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getGroupMembers = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const user_id = userId ? idConverter(userId) : null;
+
+    const { groupId } = req.params;
+
+    if (!groupId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Group ID is required',
+        });
+    }
+
+    if (!user_id) {
+        return res.status(401).json({
+            status: 'fail',
+            message: 'User authentication required',
+        });
+    }
+
+    const groupMembers = await groupTransactionServices.getGroupMembers({ groupId, user_id });
+
+    res.status(200).json({
+        status: 'success',
+        data: groupMembers,
+        message: 'Group members retrieved successfully',
+    });
+});
+
 const deleteGroup = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const user_id = userId ? idConverter(userId) : null;
@@ -456,6 +485,7 @@ const groupTransactionController = {
     getGroupTransactions,
     getGroupStatus,
     getGroupDetails,
+    getGroupMembers,
     deleteGroup,
     removeMember,
     updateGroupName
