@@ -280,6 +280,30 @@ const updateIncomeOrExpenses = catchAsync(async (req, res) => {
   });
 });
 
+const deleteIncomeOrExpenses = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const { transactionId } = req.params;
+
+  // Validate transaction ID
+  if (!transactionId) {
+    throw new Error('Transaction ID is required');
+  }
+
+  const transaction_id = idConverter(transactionId) as Types.ObjectId;
+
+  const result = await incomeAndExpensesService.deleteIncomeOrExpenses(
+    user_id,
+    transaction_id,
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income or Expenses deleted successfully',
+  });
+});
+
 const getSingleGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
@@ -476,6 +500,7 @@ const reDistributeAmountAmongMember = catchAsync(async (req, res) => {
 const incomeAndExpensesController = {
   addIncomeOrExpenses,
   updateIncomeOrExpenses,
+  deleteIncomeOrExpenses,
   createIncomeType,
   getAllIncomeType,
   createExpensesType,

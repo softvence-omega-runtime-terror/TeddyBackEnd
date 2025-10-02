@@ -2818,6 +2818,81 @@ const modifyIncomeOrExpenses = async (
   return updatedTransaction;
 };
 
+const deleteIncomeOrExpenses = async (
+  user_id: Types.ObjectId,
+  transaction_id: Types.ObjectId,
+) => {
+  if (!user_id || !transaction_id) {
+    throw new Error('user_id and transaction_id are required');
+  }
+
+  // Fetch the existing transaction
+  const transaction = await TransactionModel.findOne({
+    _id: transaction_id,
+  });
+
+  if (!transaction) {
+    throw new Error(`Transaction with id ${transaction_id} does not exist`);
+  }
+
+  // Verify user permission
+  if (!transaction.isGroupTransaction) {
+    // Non-group transaction: check if user_id matches
+    if (transaction.user_id.toString() !== user_id.toString()) {
+      throw new Error(
+        `User with id ${user_id} is not authorized to delete this transaction`,
+      );
+    }
+  } else {
+    // Group transaction: verify user is the owner of the group
+    if (!transaction.group_id) {
+      throw new Error('Group transaction is missing group_id');
+    }
+
+    const group = await ExpenseOrIncomeGroupModel.findOne({
+      _id: transaction.group_id,
+    });
+
+    if (!group) {
+      throw new Error(`Group with id ${transaction.group_id} does not exist`);
+    }
+
+    const isOwner =
+      group.user_id && group.user_id.toString() === user_id.toString();
+
+    if (!isOwner) {
+      throw new Error(
+        `User with id ${user_id} is not the owner of group ${transaction.group_id}`,
+      );
+    }
+
+    // Handle group transaction deletion - adjust redistribution amount
+    const transactionAmount = transaction.amount || 0;
+    
+    // If deleting a group transaction, add its amount back to redistribution
+    // This allows the amount to be redistributed among remaining members
+    const reDistributeAmount = group.reDistributeAmount || 0;
+    group.reDistributeAmount = reDistributeAmount + transactionAmount;
+    group.redistributeTransactionCode = transaction.transaction_Code;
+
+    await group.save();
+  }
+
+  // Delete the transaction
+  const deletedTransaction = await TransactionModel.findOneAndDelete({
+    _id: transaction_id,
+  }).lean();
+
+  if (!deletedTransaction) {
+    throw new Error('Failed to delete transaction');
+  }
+
+  return {
+    deletedTransaction,
+    message: `Transaction ${transaction_id} deleted successfully`,
+  };
+};
+
 
 //=========================redistribution ========================  
 
@@ -3104,6 +3179,7 @@ const incomeAndExpensesService = {
   getSingleGroup,
   getIndividualExpenseOrIncome,
   modifyIncomeOrExpenses,
+  deleteIncomeOrExpenses,
   getAllIncomeAndExpenses,
   getFilteredIncomeAndExpenses,
   getAnalyticsDashboard,
