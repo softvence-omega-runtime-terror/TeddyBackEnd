@@ -39,6 +39,9 @@ incomeAndExpenseRouter.post("/deleteGroup",auth([userRole.user]), incomeAndExpen
 //========================= Income and Expense Routes ========================
 
 incomeAndExpenseRouter.post("/addIncomeOrExpenses",auth([userRole.user]), incomeAndExpensesController.addIncomeOrExpenses )
+
+incomeAndExpenseRouter.put("/updateIncomeOrExpenses/:transactionId", auth([userRole.user]), incomeAndExpensesController.updateIncomeOrExpenses )
+
 incomeAndExpenseRouter.post("/getAllIncomeAndExpenses", auth([userRole.user]), incomeAndExpensesController.getAllIncomeAndExpenses )
 
 // New filtered API

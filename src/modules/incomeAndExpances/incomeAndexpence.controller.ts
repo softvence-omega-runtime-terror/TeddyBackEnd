@@ -247,6 +247,39 @@ const addIncomeOrExpenses = catchAsync(async (req, res) => {
   });
 });
 
+const updateIncomeOrExpenses = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const user_id = idConverter(userId as string) as Types.ObjectId;
+  const { transactionId } = req.params;
+  const payload = req.body;
+
+  // Validate transaction ID
+  if (!transactionId) {
+    throw new Error('Transaction ID is required');
+  }
+
+  const transaction_id = idConverter(transactionId) as Types.ObjectId;
+
+  // Validate payload for required fields if provided
+  const { transactionType, type_id } = payload;
+
+  if (transactionType === 'income' && payload.description !== undefined && !payload.description) {
+    throw new Error('description is required for income transactions');
+  }
+
+  const result = await incomeAndExpensesService.modifyIncomeOrExpenses(
+    user_id,
+    transaction_id,
+    payload,
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
+    message: 'Income or Expenses updated successfully',
+  });
+});
+
 const getSingleGroup = catchAsync(async (req, res) => {
   const userId = req.user.id;
   const user_id = idConverter(userId as string) as Types.ObjectId;
@@ -442,6 +475,7 @@ const reDistributeAmountAmongMember = catchAsync(async (req, res) => {
 
 const incomeAndExpensesController = {
   addIncomeOrExpenses,
+  updateIncomeOrExpenses,
   createIncomeType,
   getAllIncomeType,
   createExpensesType,
