@@ -5,16 +5,16 @@ import incomeAndExpensesController from "./incomeAndexpence.controller"
 import { upload } from "../../util/uploadImgToCludinary"
 
 
-const incomeAndExpenseRouter = express.Router()
+const incomeAndExpenseRouter = express.Router();
 
 //Income and Expense Type Routes 
-incomeAndExpenseRouter.post("/createIncomeType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createIncomeType )
+incomeAndExpenseRouter.post("/createIncomeType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createIncomeType );
 
-incomeAndExpenseRouter.get("/getAllIncomeType",auth([userRole.user]), incomeAndExpensesController.getAllIncomeType )
+incomeAndExpenseRouter.get("/getAllIncomeType",auth([userRole.user]), incomeAndExpensesController.getAllIncomeType );
 
-incomeAndExpenseRouter.post("/createExpensesType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createExpensesType )
+incomeAndExpenseRouter.post("/createExpensesType",auth([userRole.user]),upload.single("file"), incomeAndExpensesController.createExpensesType );
 
-incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user,userRole.admin]), incomeAndExpensesController.getAllExpensesType )
+incomeAndExpenseRouter.get("/getAllExpensesType",auth([userRole.user,userRole.admin]), incomeAndExpensesController.getAllExpensesType );
 
 // Update and Delete routes for Income and Expense Types
 incomeAndExpenseRouter.put("/updateIncomeType/:typeId", auth([userRole.user]), upload.single("file"), incomeAndExpensesController.updateIncomeType);
@@ -26,11 +26,11 @@ incomeAndExpenseRouter.delete("/deleteExpensesType/:typeId", auth([userRole.user
 
 //========================= Group Routes ========================
 
-incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createOrUpdateExpenseOrIncomeGroup )
+incomeAndExpenseRouter.post("/createOrUpdateExpenseOrIncomeGroup",auth([userRole.user]), incomeAndExpensesController.createOrUpdateExpenseOrIncomeGroup );
 
-incomeAndExpenseRouter.post("/getAllPersonalGroup",auth([userRole.user]), incomeAndExpensesController.getAllPersonalGroup )
+incomeAndExpenseRouter.post("/getAllPersonalGroup",auth([userRole.user]), incomeAndExpensesController.getAllPersonalGroup );
 
-incomeAndExpenseRouter.post("/getSingleGroup",auth([userRole.user]), incomeAndExpensesController.getSingleGroup )
+incomeAndExpenseRouter.post("/getSingleGroup",auth([userRole.user]), incomeAndExpensesController.getSingleGroup );
 
 incomeAndExpenseRouter.post("/leaveGroupOrKickOut",auth([userRole.user]), incomeAndExpensesController.leaveGroupOrKickOut )
 
