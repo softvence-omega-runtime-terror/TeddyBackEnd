@@ -668,4 +668,321 @@ groupTransactionRouter.delete('/removeMember/:groupId/:memberEmail', auth([userR
  */
 groupTransactionRouter.patch('/updateGroupName/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.updateGroupName);
 
+/**
+ * @swagger
+ * /api/group/{groupId}/settlements:
+ *   get:
+ *     summary: Get group settlements for "Slice up" feature
+ *     description: |
+ *       Retrieves detailed settlement information for a group including:
+ *       - Optimal settlements (who should pay whom and how much)
+ *       - Total balances for each member (net amount owed or owed to them)
+ *       - Settlement status (whether all debts are settled)
+ *       
+ *       This API supports the mobile app's "Slice up" functionality showing settlement details.
+ *     tags: [Group Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID to get settlements for
+ *         example: "12345"
+ *     responses:
+ *       200:
+ *         description: Group settlements retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Group settlements retrieved successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     groupId:
+ *                       type: number
+ *                       example: 12345
+ *                     groupName:
+ *                       type: string
+ *                       example: "Trip to Bali"
+ *                     settlements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           from:
+ *                             type: string
+ *                             example: "ted@example.com"
+ *                           to:
+ *                             type: string
+ *                             example: "alice@example.com"
+ *                           amount:
+ *                             type: number
+ *                             example: 40.00
+ *                     totalBalances:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           memberEmail:
+ *                             type: string
+ *                             example: "ted@example.com"
+ *                           netBalance:
+ *                             type: number
+ *                             example: -40.00
+ *                           totalPaid:
+ *                             type: number
+ *                             example: 100.00
+ *                           totalOwes:
+ *                             type: number
+ *                             example: 140.00
+ *                     isAllSettled:
+ *                       type: boolean
+ *                       example: false
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not authorized to view this group
+ *       404:
+ *         description: Group not found
+ */
+groupTransactionRouter.get('/:groupId/settlements', auth([userRole.user]), localeMiddleware, groupTransactionController.getGroupSettlements);
+
+/**
+ * @swagger
+ * /api/group/{groupId}/settle-debt:
+ *   post:
+ *     summary: Settle debt between group members
+ *     description: |
+ *       Records a debt settlement between two group members. This creates a settlement transaction
+ *       that adjusts the group balances. The settlement is recorded as an expense where the debtor
+ *       pays the creditor directly.
+ *       
+ *       Used when members settle debts outside the app and need to record the settlement.
+ *     tags: [Group Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID where debt settlement occurs
+ *         example: "12345"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fromEmail
+ *               - toEmail
+ *               - amount
+ *             properties:
+ *               fromEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Email of the member who is paying (debtor)
+ *                 example: "ted@example.com"
+ *               toEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Email of the member who is receiving payment (creditor)
+ *                 example: "alice@example.com"
+ *               amount:
+ *                 type: number
+ *                 minimum: 0.01
+ *                 description: Amount being settled
+ *                 example: 40.00
+ *     responses:
+ *       200:
+ *         description: Debt settled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Debt settled successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Debt settled successfully"
+ *                     settlement:
+ *                       type: object
+ *                       properties:
+ *                         from:
+ *                           type: string
+ *                           example: "ted@example.com"
+ *                         to:
+ *                           type: string
+ *                           example: "alice@example.com"
+ *                         amount:
+ *                           type: number
+ *                           example: 40.00
+ *                         date:
+ *                           type: string
+ *                           format: date-time
+ *                           example: "2024-01-15T10:30:00.000Z"
+ *                     updatedData:
+ *                       $ref: '#/components/schemas/GroupSettlementsResponse'
+ *       400:
+ *         description: Bad request - Invalid input data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not authorized to settle debts in this group
+ *       404:
+ *         description: Group not found
+ */
+groupTransactionRouter.post('/:groupId/settle-debt', auth([userRole.user]), localeMiddleware, groupTransactionController.settleGroupDebt);
+
+/**
+ * @swagger
+ * /api/group/{groupId}/settle-multiple-debts:
+ *   post:
+ *     summary: Settle multiple debts between group members
+ *     description: |
+ *       Records multiple debt settlements between group members in a single request. 
+ *       This creates multiple settlement transactions that adjust the group balances. 
+ *       Each settlement is recorded as an expense where the debtor pays the creditor directly.
+ *       
+ *       Used when members want to settle multiple debts at once or when processing 
+ *       optimal settlement calculations from the settlements API.
+ *     tags: [Group Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Group ID where debt settlements occur
+ *         example: "12345"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - settlements
+ *             properties:
+ *               settlements:
+ *                 type: array
+ *                 minItems: 1
+ *                 description: Array of settlement objects
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - fromEmail
+ *                     - toEmail
+ *                     - amount
+ *                   properties:
+ *                     fromEmail:
+ *                       type: string
+ *                       format: email
+ *                       description: Email of the member who is paying (debtor)
+ *                       example: "rezwanrahim.rupak@gmail.com"
+ *                     toEmail:
+ *                       type: string
+ *                       format: email
+ *                       description: Email of the member who is receiving payment (creditor)
+ *                       example: "rezwanrahim31@gmail.com"
+ *                     amount:
+ *                       type: number
+ *                       minimum: 0.01
+ *                       description: Amount being settled
+ *                       example: 50
+ *           example:
+ *             settlements:
+ *               - fromEmail: "rezwanrahim.rupak@gmail.com"
+ *                 toEmail: "rezwanrahim31@gmail.com"
+ *                 amount: 50
+ *               - fromEmail: "rezwanrahim.rupak@gmail.com"
+ *                 toEmail: "rezwanrahim31@gmail.com"
+ *                 amount: 40
+ *     responses:
+ *       200:
+ *         description: Multiple debts settled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Successfully processed 2 settlement(s)"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Successfully processed 2 settlement(s)"
+ *                     settlements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           from:
+ *                             type: string
+ *                             example: "rezwanrahim.rupak@gmail.com"
+ *                           to:
+ *                             type: string
+ *                             example: "rezwanrahim31@gmail.com"
+ *                           amount:
+ *                             type: number
+ *                             example: 50
+ *                           date:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2024-01-15T10:30:00.000Z"
+ *                     totalSettlements:
+ *                       type: number
+ *                       example: 2
+ *                     updatedData:
+ *                       $ref: '#/components/schemas/GroupSettlementsResponse'
+ *       400:
+ *         description: Bad request - Invalid input data or validation errors
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Settlement 1: amount must be greater than 0"
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not authorized to settle debts in this group
+ *       404:
+ *         description: Group not found
+ */
+groupTransactionRouter.post('/:groupId/settle-multiple-debts', auth([userRole.user]), localeMiddleware, groupTransactionController.settleMultipleGroupDebts);
+
 export default groupTransactionRouter;

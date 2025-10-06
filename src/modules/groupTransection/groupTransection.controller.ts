@@ -5,6 +5,7 @@ import groupTransactionServices from "./groupTransection.service";
 import { UserModel } from "../user/user.model";
 import { GroupTransactionModel } from "./groupTransection.model";
 import { convertCurrency } from "../../util/currencyConverter";
+import sendResponse from "../../util/sendResponse";
 
 
 const createGroupTransaction = catchAsync(async (req: Request, res: Response) => {
@@ -477,6 +478,151 @@ const updateGroupName = catchAsync(async (req: Request, res: Response) => {
 });
 
 
+// Get group settlements for "Slice up" feature
+const getGroupSettlements = catchAsync(async (req: any, res: Response) => {
+    const { groupId } = req.params;
+    const user_id = req?.user?.id ?? null;
+
+    if (!groupId) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Group ID is required',
+            data: null
+        });
+    }
+
+    const settlements = await groupTransactionServices.getGroupSettlements({
+        groupId,
+        user_id
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Group settlements retrieved successfully',
+        data: settlements
+    });
+});
+
+// Settle debt between group members
+const settleGroupDebt = catchAsync(async (req: any, res: Response) => {
+    const { groupId } = req.params;
+    const { fromEmail, toEmail, amount } = req.body;
+    const user_id = req?.user?.id ?? null;
+
+    if (!groupId || !fromEmail || !toEmail || !amount) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Group ID, fromEmail, toEmail, and amount are required',
+            data: null
+        });
+    }
+
+    if (amount <= 0) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Settlement amount must be greater than 0',
+            data: null
+        });
+    }
+
+    if (fromEmail === toEmail) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Cannot settle debt with yourself',
+            data: null
+        });
+    }
+
+    const result = await groupTransactionServices.settleDebt({
+        groupId,
+        fromEmail,
+        toEmail,
+        amount,
+        user_id
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: result.message,
+        data: result
+    });
+});
+
+// Settle multiple debts between group members
+const settleMultipleGroupDebts = catchAsync(async (req: any, res: Response) => {
+    const { groupId } = req.params;
+    const { settlements } = req.body;
+    const user_id = req?.user?.id ?? null;
+
+    if (!groupId) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Group ID is required',
+            data: null
+        });
+    }
+
+    if (!settlements || !Array.isArray(settlements) || settlements.length === 0) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: 'Settlements array is required and must contain at least one settlement',
+            data: null
+        });
+    }
+
+    // Validate each settlement
+    for (let i = 0; i < settlements.length; i++) {
+        const settlement = settlements[i];
+        if (!settlement.fromEmail || !settlement.toEmail || !settlement.amount) {
+            return sendResponse(res, {
+                statusCode: 400,
+                success: false,
+                message: `Settlement ${i + 1}: fromEmail, toEmail, and amount are required`,
+                data: null
+            });
+        }
+
+        if (settlement.amount <= 0) {
+            return sendResponse(res, {
+                statusCode: 400,
+                success: false,
+                message: `Settlement ${i + 1}: amount must be greater than 0`,
+                data: null
+            });
+        }
+
+        if (settlement.fromEmail === settlement.toEmail) {
+            return sendResponse(res, {
+                statusCode: 400,
+                success: false,
+                message: `Settlement ${i + 1}: cannot settle debt with yourself`,
+                data: null
+            });
+        }
+    }
+
+    const result = await groupTransactionServices.settleMultipleDebts({
+        groupId,
+        settlements,
+        user_id
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: result.message,
+        data: result
+    });
+});
+
 const groupTransactionController = {
     createGroupTransaction,
     addGroupMember,
@@ -486,6 +632,9 @@ const groupTransactionController = {
     getGroupStatus,
     getGroupDetails,
     getGroupMembers,
+    getGroupSettlements,
+    settleGroupDebt,
+    settleMultipleGroupDebts,
     deleteGroup,
     removeMember,
     updateGroupName

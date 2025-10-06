@@ -843,20 +843,382 @@ const getGroupSummary = async (groupId: string) => {
     }
 };
 
-// Settle debt between members (future feature)
-const settleDebt = async (groupId: string, fromMemberId: string, toMemberId: string, amount: number) => {
-    // This would be implemented for recording settlements
-    // For now, return a placeholder
-    return {
-        message: 'Debt settlement feature coming soon',
-        groupId,
-        settlement: {
-            from: fromMemberId,
-            to: toMemberId,
-            amount,
-            date: new Date()
+// Calculate optimal settlements - who should pay whom to settle all debts
+const calculateOptimalSettlements = async (groupId: string) => {
+    try {
+        const balances = await calculateGroupBalances(groupId);
+        
+        // Separate creditors (positive balance) and debtors (negative balance)
+        const creditors: { email: string; amount: number }[] = [];
+        const debtors: { email: string; amount: number }[] = [];
+        
+        Object.entries(balances).forEach(([email, balance]) => {
+            if (balance.net > 0.01) { // They are owed money (creditor)
+                creditors.push({ email, amount: balance.net });
+            } else if (balance.net < -0.01) { // They owe money (debtor)
+                debtors.push({ email, amount: Math.abs(balance.net) });
+            }
+        });
+        
+        // Calculate optimal settlements using greedy algorithm
+        const settlements: { from: string; to: string; amount: number }[] = [];
+        
+        let i = 0, j = 0;
+        while (i < debtors.length && j < creditors.length) {
+            const debtor = debtors[i];
+            const creditor = creditors[j];
+            
+            const settleAmount = Math.min(debtor.amount, creditor.amount);
+            
+            if (settleAmount > 0.01) {
+                settlements.push({
+                    from: debtor.email,
+                    to: creditor.email,
+                    amount: Math.round(settleAmount * 100) / 100 // Round to 2 decimal places
+                });
+            }
+            
+            debtor.amount -= settleAmount;
+            creditor.amount -= settleAmount;
+            
+            if (debtor.amount <= 0.01) i++;
+            if (creditor.amount <= 0.01) j++;
         }
-    };
+        
+        return settlements;
+    } catch (error: any) {
+        console.error('Error in calculateOptimalSettlements:', error.message);
+        throw new Error(`Failed to calculate settlements: ${error.message}`);
+    }
+};
+
+// Get group settlements data for "Slice up" feature
+const getGroupSettlements = async ({
+    groupId,
+    user_id
+}: {
+    groupId: string,
+    user_id: mongoose.Types.ObjectId | null
+}) => {
+    try {
+        // Get user email
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+        
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+        
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).lean();
+        
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        console.log('Group found:', group);
+        
+        // Verify user is member or owner
+        const isOwner = group.ownerEmail === userEmail;
+        const isMember = group.groupMembers?.includes(userEmail);
+        
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to view this group settlements');
+        }
+        
+        // Get balances and settlements
+        const balances = await calculateGroupBalances(groupId);
+        const settlements = await calculateOptimalSettlements(groupId);
+        
+        // Prepare total balance data
+        const totalBalances = Object.entries(balances).map(([email, balance]) => ({
+            memberEmail: email,
+            netBalance: Math.round(balance.net * 100) / 100,
+            totalPaid: Math.round(balance.paid * 100) / 100,
+            totalOwes: Math.round(balance.owes * 100) / 100
+        }));
+        
+        // Calculate total expenses
+        const totalExpenses = group.groupExpenses?.reduce((sum, expense) => sum + expense.totalExpenseAmount, 0) || 0;
+        
+        // Calculate user-specific summary
+        const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
+        const youllPay = userBalance.net < 0 ? Math.abs(userBalance.net) : 0;
+        const youllCollect = userBalance.net > 0 ? userBalance.net : 0;
+        
+        // Prepare group info
+        const groupInfo = {
+            groupId: parseInt(groupId),
+            groupName: group.groupName,
+            ownerEmail: group.ownerEmail,
+            groupMembers: group.groupMembers || [],
+            totalMembers: (group.groupMembers?.length || 0) + 1 // +1 for owner
+        };
+        
+        // Prepare summary info
+        const summaryInfo = {
+            youllPay: {
+                currency: "USD", // Default currency, could be made configurable
+                amount: Math.round(youllPay * 100) / 100
+            },
+            youllCollect: {
+                currency: "USD", // Default currency, could be made configurable  
+                amount: Math.round(youllCollect * 100) / 100
+            },
+            totalExpenses: Math.round(totalExpenses * 100) / 100,
+            totalUserBorrowed: Math.round((userBalance.owes - userBalance.paid) * 100) / 100,
+            totalUserLent: Math.round((userBalance.paid - userBalance.owes) * 100) / 100
+        };
+        
+        return {
+            group: groupInfo,
+            summary: summaryInfo,
+            settlements: settlements,
+            totalBalances: totalBalances,
+            isAllSettled: settlements.length === 0
+        };
+        
+    } catch (error: any) {
+        console.error('Error in getGroupSettlements:', error.message);
+        throw new Error(`Failed to get group settlements: ${error.message}`);
+    }
+};
+
+// Settle a specific debt between two members
+const settleDebt = async ({
+    groupId,
+    fromEmail,
+    toEmail,
+    amount,
+    user_id
+}: {
+    groupId: string,
+    fromEmail: string,
+    toEmail: string,
+    amount: number,
+    user_id: mongoose.Types.ObjectId | null
+}) => {
+    try {
+        // Get user email
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+        
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+        
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
+        
+        if (!group) {
+            throw new Error('Group not found');
+        }
+        
+        // Verify user is member or owner
+        const isOwner = group.ownerEmail === userEmail;
+        const isMember = group.groupMembers?.includes(userEmail);
+        
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to settle debts in this group');
+        }
+        
+        // Verify the settlement is valid
+        const currentBalances = await calculateGroupBalances(groupId);
+        const fromBalance = currentBalances[fromEmail]?.net || 0;
+        const toBalance = currentBalances[toEmail]?.net || 0;
+        
+        // Check if the settlement makes sense
+        if (fromBalance >= 0) {
+            throw new Error(`${fromEmail} does not owe money`);
+        }
+        
+        if (toBalance <= 0) {
+            throw new Error(`${toEmail} is not owed money`);
+        }
+        
+        if (amount > Math.abs(fromBalance)) {
+            throw new Error(`Settlement amount cannot exceed the debt amount`);
+        }
+        
+        if (amount > toBalance) {
+            throw new Error(`Settlement amount cannot exceed what is owed to ${toEmail}`);
+        }
+        
+        // Record the settlement as a new expense
+        // This settlement expense will adjust the balances
+        const settlementExpense = {
+            expenseDate: new Date(),
+            totalExpenseAmount: amount,
+            currency: 'USD' as const, // Default currency, could be configurable
+            category: new mongoose.Types.ObjectId(), // You might want to create a special "Settlement" category
+            note: `Settlement: ${fromEmail} paid ${toEmail}`,
+            paidBy: {
+                type: 'individual' as const,
+                memberEmail: fromEmail,
+                amount: amount
+            },
+            shareWith: {
+                type: 'custom' as const,
+                shares: [{
+                    memberEmail: toEmail,
+                    amount: amount
+                }]
+            }
+        };
+        
+        group.groupExpenses = group.groupExpenses || [];
+        group.groupExpenses.push(settlementExpense);
+        
+        await group.save();
+        
+        // Return updated settlement data
+        const updatedSettlements = await getGroupSettlements({ groupId, user_id });
+        
+        return {
+            message: 'Debt settled successfully',
+            settlement: {
+                from: fromEmail,
+                to: toEmail,
+                amount: amount,
+                date: new Date()
+            },
+            updatedData: updatedSettlements
+        };
+        
+    } catch (error: any) {
+        console.error('Error in settleDebt:', error.message);
+        throw new Error(`Failed to settle debt: ${error.message}`);
+    }
+};
+
+// Settle multiple debts between group members
+const settleMultipleDebts = async ({
+    groupId,
+    settlements,
+    user_id
+}: {
+    groupId: string,
+    settlements: Array<{
+        fromEmail: string,
+        toEmail: string,
+        amount: number
+    }>,
+    user_id: mongoose.Types.ObjectId | null
+}) => {
+    try {
+        // Get user email
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+        
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+        
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
+        
+        if (!group) {
+            throw new Error('Group not found');
+        }
+        
+        // Verify user is member or owner
+        const isOwner = group.ownerEmail === userEmail;
+        const isMember = group.groupMembers?.includes(userEmail);
+        
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to settle debts in this group');
+        }
+        
+        // Get current balances to validate all settlements
+        const currentBalances = await calculateGroupBalances(groupId);
+        
+        // Validate all settlements before processing any
+        const validationErrors: string[] = [];
+        
+        settlements.forEach((settlement, index) => {
+            const { fromEmail, toEmail, amount } = settlement;
+            
+            const fromBalance = currentBalances[fromEmail]?.net || 0;
+            const toBalance = currentBalances[toEmail]?.net || 0;
+            
+            // Check if the settlement makes sense
+            if (fromBalance >= 0) {
+                validationErrors.push(`Settlement ${index + 1}: ${fromEmail} does not owe money`);
+            }
+            
+            if (toBalance <= 0) {
+                validationErrors.push(`Settlement ${index + 1}: ${toEmail} is not owed money`);
+            }
+            
+            if (amount > Math.abs(fromBalance)) {
+                validationErrors.push(`Settlement ${index + 1}: amount cannot exceed the debt amount`);
+            }
+            
+            if (amount > toBalance) {
+                validationErrors.push(`Settlement ${index + 1}: amount cannot exceed what is owed to ${toEmail}`);
+            }
+        });
+        
+        if (validationErrors.length > 0) {
+            throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
+        }
+        
+        // Process all settlements
+        const settlementResults: Array<{
+            from: string,
+            to: string,
+            amount: number,
+            date: Date
+        }> = [];
+        
+        for (const settlement of settlements) {
+            const { fromEmail, toEmail, amount } = settlement;
+            
+            // Record each settlement as a new expense
+            const settlementExpense = {
+                expenseDate: new Date(),
+                totalExpenseAmount: amount,
+                currency: 'USD' as const, // Default currency, could be configurable
+                category: new mongoose.Types.ObjectId(), // You might want to create a special "Settlement" category
+                note: `Settlement: ${fromEmail} paid ${toEmail}`,
+                paidBy: {
+                    type: 'individual' as const,
+                    memberEmail: fromEmail,
+                    amount: amount
+                },
+                shareWith: {
+                    type: 'custom' as const,
+                    shares: [{
+                        memberEmail: toEmail,
+                        amount: amount
+                    }]
+                }
+            };
+            
+            group.groupExpenses = group.groupExpenses || [];
+            group.groupExpenses.push(settlementExpense);
+            
+            settlementResults.push({
+                from: fromEmail,
+                to: toEmail,
+                amount: amount,
+                date: new Date()
+            });
+        }
+        
+        await group.save();
+        
+        // Return updated settlement data
+        const updatedSettlements = await getGroupSettlements({ groupId, user_id });
+        
+        return {
+            message: `Successfully processed ${settlements.length} settlement(s)`,
+            settlements: settlementResults,
+            totalSettlements: settlements.length,
+            updatedData: updatedSettlements
+        };
+        
+    } catch (error: any) {
+        console.error('Error in settleMultipleDebts:', error.message);
+        throw new Error(`Failed to settle multiple debts: ${error.message}`);
+    }
 };
 
 // Get comprehensive group transactions with filtering and user-specific data
@@ -1341,7 +1703,10 @@ const groupTransactionServices = {
     getGroupStatus,
     calculateGroupBalances,
     getGroupSummary,
+    calculateOptimalSettlements,
+    getGroupSettlements,
     settleDebt,
+    settleMultipleDebts,
     deleteGroup,
     removeMemberFromGroup,
     updateGroupName,
