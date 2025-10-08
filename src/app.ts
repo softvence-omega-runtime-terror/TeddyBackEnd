@@ -14,7 +14,8 @@ import swaggerSpecs from './config/swagger';
 
 
 // Import the stripeWebhook controller
-app.post("/api/payment/webhook", express.raw({ type: "application/json" }), paymentController.stripeWebhook);
+// Note: This route should be BEFORE express.json() middleware to get raw body
+app.post("/api/webhook", express.raw({ type: "application/json" }), paymentController.stripeWebhook);
 
 // middleWares
 app.use(express.json());

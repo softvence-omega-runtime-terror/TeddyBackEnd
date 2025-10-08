@@ -1,6 +1,5 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
-import { MessageModel } from '../modules/message/message.model';
 import idConverter from './idConverter';
 import { IncomingMessage } from 'http';
 import { Types } from 'mongoose';
@@ -29,18 +28,18 @@ export const setupWebSocket = (server: any, jwtSecret: string) => {
       try {
         const msg = JSON.parse(data.toString());
 
-        const saved = await MessageModel.create({
-          sender: idConverter(ws.userId!) as Types.ObjectId,
-          receiver: idConverter(msg.receiverId) as Types.ObjectId,
-          text: msg.text,
-        });
+        // const saved = await MessageModel.create({
+        //   sender: idConverter(ws.userId!) as Types.ObjectId,
+        //   receiver: idConverter(msg.receiverId) as Types.ObjectId,
+        //   text: msg.text,
+        // });
 
-        wss.clients.forEach((client) => {
-          const authClient = client as AuthenticatedWebSocket;
-          if (authClient.userId === msg.receiverId && client.readyState === 1) {
-            client.send(JSON.stringify(saved));
-          }
-        });
+        // wss.clients.forEach((client) => {
+        //   const authClient = client as AuthenticatedWebSocket;
+        //   if (authClient.userId === msg.receiverId && client.readyState === 1) {
+        //     client.send(JSON.stringify(saved));
+        //   }
+        // });
       } catch (err) {
         console.error('WebSocket message error:', err);
       }

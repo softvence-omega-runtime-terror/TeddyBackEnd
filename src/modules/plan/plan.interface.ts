@@ -9,6 +9,8 @@ export type TPlan = {
     splitBills: number | 3;
     price: number;
     stripePriceId?: string;
+    discountType?: "percentage" | "fixed";
+    discountValue?: number;
     services: Schema.Types.ObjectId[];
     freeTrialDays?: number;
     subscription?: boolean;

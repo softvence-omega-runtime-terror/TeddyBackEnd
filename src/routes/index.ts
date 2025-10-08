@@ -1,7 +1,6 @@
 import express from 'express';
 import authRouter from '../modules/auth/auth.routes';
 import userRoutes from '../modules/user/user.routes';
-import messageRouter from '../modules/message/message.routes';
 import incomeAndExpenseRouter from '../modules/incomeAndExpances/incomeAndexpence.route';
 import reportRoutes from '../modules/report/report.route';
 import historyRoutes from '../modules/history/history.route';
@@ -84,10 +83,6 @@ const moduleRouts = [
   {
     path: '/users',
     router: userRoutes,
-  },
-  {
-    path: '/message',
-    router: messageRouter,
   },
   {
     path: '/incomeAndExpences',

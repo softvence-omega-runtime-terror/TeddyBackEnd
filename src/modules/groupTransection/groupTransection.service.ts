@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
+import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
 
 // Get comprehensive group status with summary and breakdowns
 const getGroupStatus = async ({
@@ -274,9 +275,11 @@ const createGroupTransaction = async ({ groupName, user_id }: { groupName: strin
             throw new Error('User email not found');
         }
 
-        const existingGroup = await GroupTransactionModel.findOne({ ownerId: user_id }).countDocuments();
+        const existingGroup = await GroupTransactionModel.find({ ownerId: user_id }).countDocuments();
 
-        if (existingGroup === 2) {
+        const isPaidUser = await UserSubscriptionModel.find({ user: user_id, status: { $in: ['active', 'completed'] }, endDate: { $gt: new Date() } }).countDocuments() > 0;
+
+        if (existingGroup === 2 && !isPaidUser) {
             throw new Error('Group limit reached. You can only create up to 2 groups in free tier.');
         }
 
@@ -339,29 +342,29 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
                 if (!group.groupId) {
                     throw new Error('Group ID is missing');
                 }
-                
+
                 // Get group expenses for currency determination (moved up to avoid redeclaration)
                 const groupExpenses = group.groupExpenses || [];
                 const involvedCurrencies = [...new Set(groupExpenses.map((exp: any) => exp.currency))];
                 const defaultCurrency = involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'USD';
-                
+
                 // Calculate user's financial summary for this group
                 const balances = await calculateGroupBalances(group.groupId.toString());
                 const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
-                
+
                 // Calculate detailed you'll pay and you'll collect arrays
                 const youllPayDetails: Array<{
                     memberEmail: string,
                     currency: string,
                     amount: number
                 }> = [];
-                
+
                 const youllCollectDetails: Array<{
                     memberEmail: string,
                     currency: string,
                     amount: number
                 }> = [];
-                
+
                 // Process each member's balance with current user
                 for (const [memberEmail, memberBalance] of Object.entries(balances)) {
                     if (memberEmail !== userEmail) {
@@ -369,7 +372,7 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
                         // if memberBalance.net < 0, they owe money
                         // From current user's perspective: if member owes money, user should collect
                         // if member is owed money, user should pay
-                        
+
                         if (memberBalance.net > 0) {
                             // Member is owed money, so current user owes them (user should pay)
                             youllPayDetails.push({
@@ -387,17 +390,17 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
                         }
                     }
                 }
-                
+
                 // Calculate totals for backward compatibility
                 const totalYoullPay = youllPayDetails.reduce((sum, item) => sum + item.amount, 0);
                 const totalYoullCollect = youllCollectDetails.reduce((sum, item) => sum + item.amount, 0);
-                
+
                 // Calculate total group expenses
                 const totalExpenses = groupExpenses.reduce((sum: number, expense: any) => sum + expense.totalExpenseAmount, 0);
-                
+
                 // Get all group members including owner
                 const allMembers = [group.ownerEmail, ...(group.groupMembers || [])].filter(Boolean);
-                
+
                 return {
                     groupId: group.groupId,
                     groupName: group.groupName,
@@ -432,8 +435,8 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
                         totalExpenses,
                         expenseCount: groupExpenses.length,
                         currencies: involvedCurrencies,
-                        lastExpenseDate: groupExpenses.length > 0 ? 
-                            new Date(Math.max(...groupExpenses.map((exp: any) => new Date(exp.expenseDate).getTime()))) : 
+                        lastExpenseDate: groupExpenses.length > 0 ?
+                            new Date(Math.max(...groupExpenses.map((exp: any) => new Date(exp.expenseDate).getTime()))) :
                             null
                     }
                 };
@@ -787,7 +790,7 @@ const getGroupSummary = async (groupId: string) => {
         // Get owner details
         const ownerInfo = group.ownerId as any;
         const ownerBalance = balances[group.ownerEmail || ''] || { paid: 0, owes: 0, net: 0 };
-        
+
         membersList.push({
             email: group.ownerEmail,
             name: ownerInfo?.name || 'Unknown',
@@ -805,7 +808,7 @@ const getGroupSummary = async (groupId: string) => {
         for (const memberEmail of (group.groupMembers || [])) {
             const memberUser = await UserModel.findOne({ email: memberEmail }).select('name email').lean();
             const memberBalance = balances[memberEmail] || { paid: 0, owes: 0, net: 0 };
-            
+
             membersList.push({
                 email: memberEmail,
                 name: memberUser?.name || 'Unknown',
@@ -847,11 +850,11 @@ const getGroupSummary = async (groupId: string) => {
 const calculateOptimalSettlements = async (groupId: string) => {
     try {
         const balances = await calculateGroupBalances(groupId);
-        
+
         // Separate creditors (positive balance) and debtors (negative balance)
         const creditors: { email: string; amount: number }[] = [];
         const debtors: { email: string; amount: number }[] = [];
-        
+
         Object.entries(balances).forEach(([email, balance]) => {
             if (balance.net > 0.01) { // They are owed money (creditor)
                 creditors.push({ email, amount: balance.net });
@@ -859,17 +862,17 @@ const calculateOptimalSettlements = async (groupId: string) => {
                 debtors.push({ email, amount: Math.abs(balance.net) });
             }
         });
-        
+
         // Calculate optimal settlements using greedy algorithm
         const settlements: { from: string; to: string; amount: number }[] = [];
-        
+
         let i = 0, j = 0;
         while (i < debtors.length && j < creditors.length) {
             const debtor = debtors[i];
             const creditor = creditors[j];
-            
+
             const settleAmount = Math.min(debtor.amount, creditor.amount);
-            
+
             if (settleAmount > 0.01) {
                 settlements.push({
                     from: debtor.email,
@@ -877,14 +880,14 @@ const calculateOptimalSettlements = async (groupId: string) => {
                     amount: Math.round(settleAmount * 100) / 100 // Round to 2 decimal places
                 });
             }
-            
+
             debtor.amount -= settleAmount;
             creditor.amount -= settleAmount;
-            
+
             if (debtor.amount <= 0.01) i++;
             if (creditor.amount <= 0.01) j++;
         }
-        
+
         return settlements;
     } catch (error: any) {
         console.error('Error in calculateOptimalSettlements:', error.message);
@@ -903,32 +906,32 @@ const getGroupSettlements = async ({
     try {
         // Get user email
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-        
+
         if (!userEmail) {
             throw new Error('User email not found');
         }
-        
+
         // Find the group
         const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).lean();
-        
+
         if (!group) {
             throw new Error('Group not found');
         }
 
         console.log('Group found:', group);
-        
+
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
-        
+
         if (!isOwner && !isMember) {
             throw new Error('You are not authorized to view this group settlements');
         }
-        
+
         // Get balances and settlements
         const balances = await calculateGroupBalances(groupId);
         const settlements = await calculateOptimalSettlements(groupId);
-        
+
         // Prepare total balance data
         const totalBalances = Object.entries(balances).map(([email, balance]) => ({
             memberEmail: email,
@@ -936,15 +939,15 @@ const getGroupSettlements = async ({
             totalPaid: Math.round(balance.paid * 100) / 100,
             totalOwes: Math.round(balance.owes * 100) / 100
         }));
-        
+
         // Calculate total expenses
         const totalExpenses = group.groupExpenses?.reduce((sum, expense) => sum + expense.totalExpenseAmount, 0) || 0;
-        
+
         // Calculate user-specific summary
         const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
         const youllPay = userBalance.net < 0 ? Math.abs(userBalance.net) : 0;
         const youllCollect = userBalance.net > 0 ? userBalance.net : 0;
-        
+
         // Prepare group info
         const groupInfo = {
             groupId: parseInt(groupId),
@@ -953,7 +956,7 @@ const getGroupSettlements = async ({
             groupMembers: group.groupMembers || [],
             totalMembers: (group.groupMembers?.length || 0) + 1 // +1 for owner
         };
-        
+
         // Prepare summary info
         const summaryInfo = {
             youllPay: {
@@ -968,7 +971,7 @@ const getGroupSettlements = async ({
             totalUserBorrowed: Math.round((userBalance.owes - userBalance.paid) * 100) / 100,
             totalUserLent: Math.round((userBalance.paid - userBalance.owes) * 100) / 100
         };
-        
+
         return {
             group: groupInfo,
             summary: summaryInfo,
@@ -976,7 +979,7 @@ const getGroupSettlements = async ({
             totalBalances: totalBalances,
             isAllSettled: settlements.length === 0
         };
-        
+
     } catch (error: any) {
         console.error('Error in getGroupSettlements:', error.message);
         throw new Error(`Failed to get group settlements: ${error.message}`);
@@ -1000,48 +1003,48 @@ const settleDebt = async ({
     try {
         // Get user email
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-        
+
         if (!userEmail) {
             throw new Error('User email not found');
         }
-        
+
         // Find the group
         const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
-        
+
         if (!group) {
             throw new Error('Group not found');
         }
-        
+
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
-        
+
         if (!isOwner && !isMember) {
             throw new Error('You are not authorized to settle debts in this group');
         }
-        
+
         // Verify the settlement is valid
         const currentBalances = await calculateGroupBalances(groupId);
         const fromBalance = currentBalances[fromEmail]?.net || 0;
         const toBalance = currentBalances[toEmail]?.net || 0;
-        
+
         // Check if the settlement makes sense
         if (fromBalance >= 0) {
             throw new Error(`${fromEmail} does not owe money`);
         }
-        
+
         if (toBalance <= 0) {
             throw new Error(`${toEmail} is not owed money`);
         }
-        
+
         if (amount > Math.abs(fromBalance)) {
             throw new Error(`Settlement amount cannot exceed the debt amount`);
         }
-        
+
         if (amount > toBalance) {
             throw new Error(`Settlement amount cannot exceed what is owed to ${toEmail}`);
         }
-        
+
         // Record the settlement as a new expense
         // This settlement expense will adjust the balances
         const settlementExpense = {
@@ -1063,15 +1066,15 @@ const settleDebt = async ({
                 }]
             }
         };
-        
+
         group.groupExpenses = group.groupExpenses || [];
         group.groupExpenses.push(settlementExpense);
-        
+
         await group.save();
-        
+
         // Return updated settlement data
         const updatedSettlements = await getGroupSettlements({ groupId, user_id });
-        
+
         return {
             message: 'Debt settled successfully',
             settlement: {
@@ -1082,7 +1085,7 @@ const settleDebt = async ({
             },
             updatedData: updatedSettlements
         };
-        
+
     } catch (error: any) {
         console.error('Error in settleDebt:', error.message);
         throw new Error(`Failed to settle debt: ${error.message}`);
@@ -1106,60 +1109,60 @@ const settleMultipleDebts = async ({
     try {
         // Get user email
         const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
-        
+
         if (!userEmail) {
             throw new Error('User email not found');
         }
-        
+
         // Find the group
         const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
-        
+
         if (!group) {
             throw new Error('Group not found');
         }
-        
+
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
-        
+
         if (!isOwner && !isMember) {
             throw new Error('You are not authorized to settle debts in this group');
         }
-        
+
         // Get current balances to validate all settlements
         const currentBalances = await calculateGroupBalances(groupId);
-        
+
         // Validate all settlements before processing any
         const validationErrors: string[] = [];
-        
+
         settlements.forEach((settlement, index) => {
             const { fromEmail, toEmail, amount } = settlement;
-            
+
             const fromBalance = currentBalances[fromEmail]?.net || 0;
             const toBalance = currentBalances[toEmail]?.net || 0;
-            
+
             // Check if the settlement makes sense
             if (fromBalance >= 0) {
                 validationErrors.push(`Settlement ${index + 1}: ${fromEmail} does not owe money`);
             }
-            
+
             if (toBalance <= 0) {
                 validationErrors.push(`Settlement ${index + 1}: ${toEmail} is not owed money`);
             }
-            
+
             if (amount > Math.abs(fromBalance)) {
                 validationErrors.push(`Settlement ${index + 1}: amount cannot exceed the debt amount`);
             }
-            
+
             if (amount > toBalance) {
                 validationErrors.push(`Settlement ${index + 1}: amount cannot exceed what is owed to ${toEmail}`);
             }
         });
-        
+
         if (validationErrors.length > 0) {
             throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
         }
-        
+
         // Process all settlements
         const settlementResults: Array<{
             from: string,
@@ -1167,10 +1170,10 @@ const settleMultipleDebts = async ({
             amount: number,
             date: Date
         }> = [];
-        
+
         for (const settlement of settlements) {
             const { fromEmail, toEmail, amount } = settlement;
-            
+
             // Record each settlement as a new expense
             const settlementExpense = {
                 expenseDate: new Date(),
@@ -1191,10 +1194,10 @@ const settleMultipleDebts = async ({
                     }]
                 }
             };
-            
+
             group.groupExpenses = group.groupExpenses || [];
             group.groupExpenses.push(settlementExpense);
-            
+
             settlementResults.push({
                 from: fromEmail,
                 to: toEmail,
@@ -1202,19 +1205,19 @@ const settleMultipleDebts = async ({
                 date: new Date()
             });
         }
-        
+
         await group.save();
-        
+
         // Return updated settlement data
         const updatedSettlements = await getGroupSettlements({ groupId, user_id });
-        
+
         return {
             message: `Successfully processed ${settlements.length} settlement(s)`,
             settlements: settlementResults,
             totalSettlements: settlements.length,
             updatedData: updatedSettlements
         };
-        
+
     } catch (error: any) {
         console.error('Error in settleMultipleDebts:', error.message);
         throw new Error(`Failed to settle multiple debts: ${error.message}`);
@@ -1423,7 +1426,7 @@ const deleteGroup = async (groupId: string, userEmail: string) => {
         if (group.groupExpenses && group.groupExpenses.length > 0) {
             // Calculate current balances to check if all debts are settled
             const balances = await calculateGroupBalances(groupId);
-            
+
             // Check if any member has outstanding debt (net balance is not 0)
             const unsettledMembers = Object.entries(balances).filter(([_, balance]) => {
                 return Math.abs(balance.net) > 0.01; // Allow for small rounding differences
@@ -1509,7 +1512,7 @@ const removeMemberFromGroup = async (groupId: string, memberEmail: string, reque
             // Check if member is involved in any expenses (as payer or part of sharing)
             const isInvolvedInExpenses = group.groupExpenses.some(expense => {
                 // Check if member paid for any expense
-                const isPayer = expense.paidBy.type === 'individual' 
+                const isPayer = expense.paidBy.type === 'individual'
                     ? expense.paidBy.memberEmail === memberEmail
                     : expense.paidBy.payments?.some(payment => payment.memberEmail === memberEmail);
 
@@ -1528,7 +1531,7 @@ const removeMemberFromGroup = async (groupId: string, memberEmail: string, reque
 
         // All validations passed, proceed with removal
         let updatedGroup;
-        
+
         if (isOwnerLeaving) {
             // If owner is leaving and no other members, delete the group
             updatedGroup = await GroupTransactionModel.findOneAndDelete({ groupId: parseInt(groupId) });

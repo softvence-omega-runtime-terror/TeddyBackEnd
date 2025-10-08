@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { History } from "./history.model";
+import { createHistory } from "./history.service";
 
 export const postHistory = async (req: Request, res: Response) => {
   try {
@@ -7,16 +8,12 @@ export const postHistory = async (req: Request, res: Response) => {
 
     if (!userId || !human || !assistant) {
       res.status(400).json({ message: "Missing required fields" });
-      return
+      return;
     }
 
-    const newHistory = new History({
-      userId,
-      human,
-      assistant
-    });
+    const result = await createHistory({ userId, human, assistant });
+    const newHistory = result;
 
-    await newHistory.save();
     res.status(201).json(newHistory);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });

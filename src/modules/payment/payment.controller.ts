@@ -29,23 +29,46 @@ const createCheckout = catchAsync(async (req: Request, res: Response) => {
 
 // Handle Stripe Webhook
 const stripeWebhook = catchAsync(async (req: Request, res: Response) => {
-
+    console.log("🎯 Webhook endpoint hit - /api/webhook");
+    
     const sig = req.headers["stripe-signature"] as string;
+    console.log("📋 Stripe signature present:", !!sig);
+    
+    if (!sig) {
+        console.error("❌ No Stripe signature found in headers");
+        return res.status(400).send("Missing Stripe signature");
+    }
+
     let event;
 
     try {
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        console.log("🔑 Webhook secret configured:", !!webhookSecret);
+        console.log("🔑 Webhook secret length:", webhookSecret?.length || 0);
+        
+        if (!webhookSecret) {
+            throw new Error("STRIPE_WEBHOOK_SECRET not configured");
+        }
+        
         event = stripe.webhooks.constructEvent(
             req.body,
             sig,
-            process.env.STRIPE_WEBHOOK_SECRET as string
+            webhookSecret
         );
 
+        console.log("✅ Webhook signature verified, processing event:", event.type);
+        console.log("📦 Event ID:", event.id);
+        
         const result = await paymentServices.handleStripeWebhook(event);
+        
+        // Send success response to Stripe
+        console.log("✅ Webhook processed successfully");
+        res.status(200).json(result);
     } catch (err: any) {
-        console.error("Webhook signature verification failed:", err.message);
+        console.error("❌ Webhook processing error:", err.message);
+        console.error("❌ Error stack:", err.stack);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-
 });
 
 

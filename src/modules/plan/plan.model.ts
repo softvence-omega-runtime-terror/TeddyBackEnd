@@ -10,6 +10,8 @@ const planSchema = new Schema<TPlan>({
     splitBills: { type: Number, default: 3 },
     price: { type: Number, required: true },
     stripePriceId: { type: String, unique: true, required: true },
+    discountType: { type: String, enum: ["percentage", "fixed"], default: "fixed" },
+    discountValue: { type: Number, default: 0 },
     services: { type: [Schema.Types.ObjectId], ref: "services", required: true },
     freeTrialDays: { type: Number, default: 0 },
     subscription: { type: Boolean, default: false },
