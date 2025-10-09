@@ -67,14 +67,14 @@ const getGroups = catchAsync(async (req: Request, res: Response) => {
         for (const group of groups.groups) {
             if (group.financialSummary) {
                 const { financialSummary } = group;
-                
+
                 // Convert youllPay amounts
                 if (financialSummary.youllPay && Array.isArray(financialSummary.youllPay)) {
                     for (const payment of financialSummary.youllPay) {
                         if (payment.currency && payment.currency !== userCurrency) {
                             payment.amount = await convertCurrency(
-                                payment.amount, 
-                                payment.currency as any, 
+                                payment.amount,
+                                payment.currency as any,
                                 userCurrency as any
                             );
                             payment.currency = userCurrency;
@@ -88,8 +88,8 @@ const getGroups = catchAsync(async (req: Request, res: Response) => {
                     for (const collection of financialSummary.youllCollect) {
                         if (collection.currency && collection.currency !== userCurrency) {
                             collection.amount = await convertCurrency(
-                                collection.amount, 
-                                collection.currency as any, 
+                                collection.amount,
+                                collection.currency as any,
                                 userCurrency as any
                             );
                             collection.currency = userCurrency;
@@ -159,6 +159,27 @@ const getGroups = catchAsync(async (req: Request, res: Response) => {
 
     res.status(200).json(response);
 });
+
+const getGroupsByUserId = catchAsync(async (req: Request, res: Response) => {
+
+    const { userId } = req.params;
+    if (!userId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'User ID is required'
+        })
+    }
+
+    const id = idConverter(userId);
+
+    const groups = await groupTransactionServices.getGroupsByUserId({ userId: id });
+    res.status(200).json({
+        status: 'success',
+        data: groups,
+        message: 'Groups retrieved successfully',
+    })
+
+})
 
 
 const addGroupExpense = catchAsync(async (req: Request, res: Response) => {
@@ -278,7 +299,7 @@ const getGroupDetails = catchAsync(async (req: Request, res: Response) => {
 
     // Check if user is authorized to view group details
     const userEmail = await UserModel.findById(user_id).select('email').lean().then((user: any) => user?.email || null);
-    
+
     if (!userEmail) {
         return res.status(404).json({
             status: 'fail',
@@ -288,7 +309,7 @@ const getGroupDetails = catchAsync(async (req: Request, res: Response) => {
 
     // Find the group to check membership
     const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).lean();
-    
+
     if (!group) {
         return res.status(404).json({
             status: 'fail',
@@ -367,7 +388,7 @@ const deleteGroup = catchAsync(async (req: Request, res: Response) => {
 
     // Get user email for authorization
     const userEmail = await UserModel.findById(user_id).select('email').lean().then((user: any) => user?.email || null);
-    
+
     if (!userEmail) {
         return res.status(404).json({
             status: 'fail',
@@ -413,7 +434,7 @@ const removeMember = catchAsync(async (req: Request, res: Response) => {
 
     // Get requesting user's email for authorization
     const requestingUserEmail = await UserModel.findById(user_id).select('email').lean().then((user: any) => user?.email || null);
-    
+
     if (!requestingUserEmail) {
         return res.status(404).json({
             status: 'fail',
@@ -460,7 +481,7 @@ const updateGroupName = catchAsync(async (req: Request, res: Response) => {
 
     // Get requesting user's email for authorization
     const userEmail = await UserModel.findById(user_id).select('email').lean().then((user: any) => user?.email || null);
-    
+
     if (!userEmail) {
         return res.status(404).json({
             status: 'fail',
@@ -627,6 +648,7 @@ const groupTransactionController = {
     createGroupTransaction,
     addGroupMember,
     getGroups,
+    getGroupsByUserId,
     addGroupExpense,
     getGroupTransactions,
     getGroupStatus,

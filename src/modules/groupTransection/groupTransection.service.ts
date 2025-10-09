@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
+import idConverter from "../../util/idConverter";
 
 // Get comprehensive group status with summary and breakdowns
 const getGroupStatus = async ({
@@ -484,6 +485,13 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
         throw new Error(`Failed to get groups: ${error.message}`);
     }
 };
+
+const getGroupsByUserId = async ({ userId }: { userId: mongoose.Types.ObjectId | null }) => {
+
+    const result = await GroupTransactionModel.find({ ownerId: userId });
+    return result;
+
+}
 
 
 const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: string, expenseData: any, user_id: mongoose.Types.ObjectId | null }) => {
@@ -1701,6 +1709,7 @@ const groupTransactionServices = {
     createGroupTransaction,
     addGroupMember,
     getGroups,
+    getGroupsByUserId,
     addGroupExpense,
     getGroupTransactions,
     getGroupStatus,
