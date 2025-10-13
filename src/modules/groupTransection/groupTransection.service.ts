@@ -475,9 +475,34 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
         // Sort groups by creation date (newest first)
         processedGroups.sort((a, b) => new Date(b.groupCreateDate).getTime() - new Date(a.groupCreateDate).getTime());
 
+
+        const fetchAiData = async (id: string) => {
+            try {
+                const response = await fetch(`https://ai.thesliceup.com/message/summary?user_id=${id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data;
+                }
+            } catch (error) {
+                console.error(`Error fetching AI data for user ${id}:`, error);
+                return null;
+            }
+        }
+
+        const aiData = await fetchAiData(user_id ? user_id?.toString() : '');
+
+        console.log('AI Data:', aiData);
+
         return {
             totalGroups: processedGroups.length,
-            groups: processedGroups
+            groups: processedGroups,
+            aiData: aiData || {}
         };
 
     } catch (error: any) {
