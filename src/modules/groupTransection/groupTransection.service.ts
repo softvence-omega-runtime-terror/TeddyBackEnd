@@ -497,8 +497,6 @@ const getGroups = async ({ user_id }: { user_id: mongoose.Types.ObjectId | null 
 
         const aiData = await fetchAiData(user_id ? user_id?.toString() : '');
 
-        console.log('AI Data:', aiData);
-
         return {
             totalGroups: processedGroups.length,
             groups: processedGroups,
