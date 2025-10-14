@@ -213,6 +213,72 @@ const addGroupExpense = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const updateGroupExpense = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const user_id = userId ? idConverter(userId) : null;
+
+    const { groupId, expenseId } = req.params;
+    const { ...expenseData } = req.body;
+
+    if (!groupId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Group ID is required',
+        });
+    }
+
+    if (!expenseId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Expense ID is required',
+        });
+    }
+
+    if (!expenseData || Object.keys(expenseData).length === 0) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Expense data is required for update',
+        });
+    }
+
+    const updatedGroup = await groupTransactionServices.updateGroupExpense({ groupId, expenseId, expenseData, user_id });
+
+    res.status(200).json({
+        status: 'success',
+        data: updatedGroup,
+        message: 'Group expense updated successfully',
+    });
+});
+
+const deleteGroupExpense = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?.id;
+    const user_id = userId ? idConverter(userId) : null;
+
+    const { groupId, expenseId } = req.params;
+
+    if (!groupId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Group ID is required',
+        });
+    }
+
+    if (!expenseId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Expense ID is required',
+        });
+    }
+
+    const updatedGroup = await groupTransactionServices.deleteGroupExpense({ groupId, expenseId, user_id });
+
+    res.status(200).json({
+        status: 'success',
+        data: updatedGroup,
+        message: 'Group expense deleted successfully',
+    });
+});
+
 const getGroupTransactions = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const user_id = userId ? idConverter(userId) : null;
@@ -650,6 +716,8 @@ const groupTransactionController = {
     getGroups,
     getGroupsByUserId,
     addGroupExpense,
+    updateGroupExpense,
+    deleteGroupExpense,
     getGroupTransactions,
     getGroupStatus,
     getGroupDetails,

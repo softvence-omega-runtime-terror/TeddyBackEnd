@@ -16,6 +16,10 @@ groupTransactionRouter.get('/getGroups/:userId', localeMiddleware, groupTransact
 
 groupTransactionRouter.post('/addGroupExpense/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.addGroupExpense);
 
+groupTransactionRouter.put('/updateGroupExpense/:groupId/:expenseId', auth([userRole.user]), localeMiddleware, groupTransactionController.updateGroupExpense);
+
+groupTransactionRouter.delete('/deleteGroupExpense/:groupId/:expenseId', auth([userRole.user]), localeMiddleware, groupTransactionController.deleteGroupExpense);
+
 groupTransactionRouter.get('/getGroupTransactions/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.getGroupTransactions);
 
 groupTransactionRouter.get('/getGroupStatus/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.getGroupStatus);

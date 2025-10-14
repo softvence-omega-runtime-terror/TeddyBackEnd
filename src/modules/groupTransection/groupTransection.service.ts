@@ -610,6 +610,160 @@ const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: str
     }
 };
 
+const updateGroupExpense = async ({ groupId, expenseId, expenseData, user_id }: { 
+    groupId: string, 
+    expenseId: string, 
+    expenseData: any, 
+    user_id: mongoose.Types.ObjectId | null 
+}) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).session(session);
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+
+        // Verify user is group owner or member
+        const isOwner = group.ownerId?.toString() === user_id?.toString();
+        const isMember = group.groupMembers?.includes(userEmail?.toString() || '');
+
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to update expenses in this group');
+        }
+
+        // Find the expense to update
+        const expenseIndex = group.groupExpenses?.findIndex((expense: any) => expense._id?.toString() === expenseId);
+
+        if (expenseIndex === -1 || expenseIndex === undefined) {
+            throw new Error('Expense not found');
+        }
+
+        const existingExpense = group.groupExpenses?.[expenseIndex] as any;
+
+        if (!existingExpense) {
+            throw new Error('Expense not found');
+        }
+
+        // Merge existing expense with updated data
+        const {
+            expenseDate,
+            totalExpenseAmount,
+            currency,
+            category,
+            note,
+            paidBy,
+            shareWith
+        } = expenseData;
+
+        // Update only provided fields
+        const updatedExpense = {
+            ...existingExpense,
+            ...(expenseDate && { expenseDate: new Date(expenseDate) }),
+            ...(totalExpenseAmount && { totalExpenseAmount }),
+            ...(currency && { currency }),
+            ...(category && { category: new mongoose.Types.ObjectId(category) }),
+            ...(note !== undefined && { note }),
+            ...(paidBy && { paidBy }),
+            ...(shareWith && { shareWith })
+        };
+
+        // Validate updated expense data if critical fields are being changed
+        if (totalExpenseAmount && totalExpenseAmount <= 0) {
+            throw new Error('Total expense amount must be greater than 0');
+        }
+
+        if (paidBy) {
+            await validatePaidBy(paidBy, updatedExpense.totalExpenseAmount, group);
+            updatedExpense.paidBy = { ...paidBy, amount: updatedExpense.totalExpenseAmount };
+        }
+
+        if (shareWith) {
+            await validateShareWith(shareWith, updatedExpense.totalExpenseAmount, group);
+        }
+
+        // Update the expense in the array
+        group.groupExpenses![expenseIndex] = updatedExpense as any;
+
+        // Save the updated group
+        const updatedGroup = await group.save({ session });
+
+        await session.commitTransaction();
+        return updatedGroup;
+
+    } catch (error: any) {
+        await session.abortTransaction();
+        console.error('Error in updateGroupExpense service:', error.message);
+        throw new Error(`Failed to update group expense: ${error.message}`);
+    } finally {
+        session.endSession();
+    }
+};
+
+const deleteGroupExpense = async ({ groupId, expenseId, user_id }: { 
+    groupId: string, 
+    expenseId: string, 
+    user_id: mongoose.Types.ObjectId | null 
+}) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Find the group
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).session(session);
+
+        if (!group) {
+            throw new Error('Group not found');
+        }
+
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+
+        // Verify user is group owner or member
+        const isOwner = group.ownerId?.toString() === user_id?.toString();
+        const isMember = group.groupMembers?.includes(userEmail?.toString() || '');
+
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to delete expenses in this group');
+        }
+
+        // Find the expense to delete
+        const expenseIndex = group.groupExpenses?.findIndex((expense: any) => expense._id?.toString() === expenseId);
+
+        if (expenseIndex === -1 || expenseIndex === undefined) {
+            throw new Error('Expense not found');
+        }
+
+        // Remove the expense from the array
+        group.groupExpenses?.splice(expenseIndex, 1);
+
+        // Save the updated group
+        const updatedGroup = await group.save({ session });
+
+        await session.commitTransaction();
+        return updatedGroup;
+
+    } catch (error: any) {
+        await session.abortTransaction();
+        console.error('Error in deleteGroupExpense service:', error.message);
+        throw new Error(`Failed to delete group expense: ${error.message}`);
+    } finally {
+        session.endSession();
+    }
+};
+
 // Helper function to validate paidBy structure
 const validatePaidBy = async (paidBy: any, totalAmount: number, group: any) => {
     if (!paidBy.type || !['individual', 'multiple'].includes(paidBy.type)) {
@@ -1893,6 +2047,8 @@ const groupTransactionServices = {
     getGroups,
     getGroupsByUserId,
     addGroupExpense,
+    updateGroupExpense,
+    deleteGroupExpense,
     getGroupTransactions,
     getGroupStatus,
     calculateGroupBalances,
