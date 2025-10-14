@@ -30,10 +30,16 @@ groupTransactionRouter.delete('/removeMember/:groupId/:memberEmail', auth([userR
 
 groupTransactionRouter.patch('/updateGroupName/:groupId', auth([userRole.user]), localeMiddleware, groupTransactionController.updateGroupName);
 
+
+
 groupTransactionRouter.get('/:groupId/settlements', auth([userRole.user]), localeMiddleware, groupTransactionController.getGroupSettlements);
+
+groupTransactionRouter.post('/:groupId/settle-multiple-debts', auth([userRole.user]), localeMiddleware, groupTransactionController.settleMultipleGroupDebts);
+
+
+
 
 groupTransactionRouter.post('/:groupId/settle-debt', auth([userRole.user]), localeMiddleware, groupTransactionController.settleGroupDebt);
 
-groupTransactionRouter.post('/:groupId/settle-multiple-debts', auth([userRole.user]), localeMiddleware, groupTransactionController.settleMultipleGroupDebts);
 
 export default groupTransactionRouter;

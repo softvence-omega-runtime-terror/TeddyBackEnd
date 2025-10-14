@@ -1073,10 +1073,10 @@ const addIncomeOrExpenses = async (user_id: Types.ObjectId, payload: any) => {
     contribution_list,
     amount: payloadAmount,
   } = payload;
-  
+
   // Use user's preferred currency if not provided in payload
   const currency = payloadCurrency || userCurrency;
-  
+
   let amount = payloadAmount || 0;
   const effectiveDate = date || new Date().toISOString();
 
@@ -1868,9 +1868,9 @@ const getFilteredIncomeAndExpenses = async (
   if (filters?.searchText) {
     // First, get all type IDs that match the search text
     const matchData = await CategoryModel.find({
-        user_id: { $in: [user_id, null] },
-        'name': { $regex: filters.searchText, $options: 'i' }
-      }).lean();
+      user_id: { $in: [user_id, null] },
+      'name': { $regex: filters.searchText, $options: 'i' }
+    }).lean();
 
     // Extract matching type IDs
     const matchingTypeIds: Types.ObjectId[] = [];
@@ -1960,7 +1960,7 @@ const getFilteredIncomeAndExpenses = async (
 
       // Get the type name for this transaction
       if (t.type_id) {
-        const findType = await CategoryModel.findOne({_id: t.type_id }).lean();
+        const findType = await CategoryModel.findOne({ _id: t.type_id }).lean();
         typeName = findType ? findType.name : null;
       }
 
@@ -2000,7 +2000,7 @@ const getFilteredIncomeAndExpenses = async (
   const getDayNameUTC = (yyyyMMdd: string) => {
     try {
       const d = new Date(`${yyyyMMdd}T00:00:00.000Z`);
-      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       return days[d.getUTCDay()] || '';
     } catch {
       return '';
@@ -2385,34 +2385,8 @@ const getCategoryBreakdown = async (
   // Get type names and create breakdown
   const categoryBreakdown = await Promise.all(
     Object.values(typeGroups).map(async (group: any) => {
-      let typeName = 'Unknown';
 
-      // Find the type name based on transaction type
-      if (transactionType === 'expense') {
-        const expenseType = await ExpenseTypesModel.findOne({
-          user_id: { $in: [user_id, null] },
-          'expenseTypeList._id': group.typeId
-        }).lean();
-
-        if (expenseType) {
-          const type = expenseType.expenseTypeList.find(
-            (t: any) => t._id.toString() === group.typeId
-          );
-          typeName = type ? type.name : 'Unknown';
-        }
-      } else if (transactionType === 'income') {
-        const incomeType = await IncomeTypesModel.findOne({
-          user_id: { $in: [user_id, null] },
-          'incomeTypeList._id': group.typeId
-        }).lean();
-
-        if (incomeType) {
-          const type = incomeType.incomeTypeList.find(
-            (t: any) => t._id.toString() === group.typeId
-          );
-          typeName = type ? type.name : 'Unknown';
-        }
-      }
+      const typeName = await CategoryModel.findOne({ _id: group.typeId, user_id }).lean().then(doc => doc ? doc.name : 'Unknown');
 
       const percentage = totalAmount > 0 ? Math.round((group.amount / totalAmount) * 100) : 0;
 
@@ -2459,7 +2433,7 @@ const getIndividualTypeSummary = async (
     const convertedAmount = transaction.convertedAmount !== undefined ? transaction.convertedAmount : transaction.amount;
     const originalAmount = transaction.amount;
     const originalCurrency = transaction.currency || 'USD';
-    
+
     // Track currency breakdown
     if (!acc[typeId].currencyBreakdown[originalCurrency]) {
       acc[typeId].currencyBreakdown[originalCurrency] = {
@@ -2535,7 +2509,7 @@ const getIndividualTypeSummary = async (
           count: 0
         };
       }
-      
+
       typesSummaryObject[group.typeName].currencyBreakdown[currency].income += group.currencyBreakdown[currency].income;
       typesSummaryObject[group.typeName].currencyBreakdown[currency].expenses += group.currencyBreakdown[currency].expenses;
       typesSummaryObject[group.typeName].currencyBreakdown[currency].count += group.currencyBreakdown[currency].count;
@@ -2868,7 +2842,7 @@ const deleteIncomeOrExpenses = async (
 
     // Handle group transaction deletion - adjust redistribution amount
     const transactionAmount = transaction.amount || 0;
-    
+
     // If deleting a group transaction, add its amount back to redistribution
     // This allows the amount to be redistributed among remaining members
     const reDistributeAmount = group.reDistributeAmount || 0;

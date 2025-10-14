@@ -2,7 +2,13 @@ import mongoose from "mongoose";
 import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
+import { GroupSettlementHistoryModel } from "./groupSettlementHistory.model";
 import idConverter from "../../util/idConverter";
+
+// Simple UUID generator function
+const generateBatchId = () => {
+    return 'batch_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+};
 
 // Get comprehensive group status with summary and breakdowns
 const getGroupStatus = async ({
@@ -961,7 +967,53 @@ const getGroupSettlements = async ({
 
         // Get balances and settlements
         const balances = await calculateGroupBalances(groupId);
-        const settlements = await calculateOptimalSettlements(groupId);
+        const currentSettlements = await calculateOptimalSettlements(groupId);
+
+        // Get settlement history from database
+        const settlementHistory = await GroupSettlementHistoryModel.find({
+            groupId: parseInt(groupId)
+        }).sort({ settledAt: -1 }).lean();
+
+        console.log('Current settlements count:', currentSettlements.length);
+        console.log('Settlement history count:', settlementHistory.length);
+        console.log('Current settlements data:', currentSettlements);
+        console.log('Settlement history data:', settlementHistory);
+
+        // Combine current settlements with historical data for display
+        let settlementsToShow: any[] = [];
+
+        // Strategy: Always show BOTH current and recent historical settlements
+        // This gives the frontend complete context
+        
+        // Add current settlements (if any) - these are active/pending settlements
+        if (currentSettlements.length > 0) {
+            console.log('Adding current settlements to display');
+            const currentSettlementsFormatted = currentSettlements.map(settlement => ({
+                ...settlement,
+                isHistorical: false
+            }));
+            settlementsToShow.push(...currentSettlementsFormatted);
+        }
+
+        // Always add recent historical settlements for context (last 5)
+        if (settlementHistory.length > 0) {
+            console.log('Adding historical settlements to display');
+            const recentHistoricalSettlements = settlementHistory.slice(0, 5).map(history => ({
+                from: history.fromEmail,
+                to: history.toEmail,
+                amount: history.amount,
+                isHistorical: true,
+                settledAt: history.settledAt
+            }));
+            settlementsToShow.push(...recentHistoricalSettlements);
+        }
+
+        // If still no settlements to show, it means no current and no history
+        if (settlementsToShow.length === 0) {
+            console.log('No settlements found - neither current nor historical');
+        }
+
+        console.log('Final settlements to show:', settlementsToShow);
 
         // Prepare total balance data
         const totalBalances = Object.entries(balances).map(([email, balance]) => ({
@@ -1006,9 +1058,11 @@ const getGroupSettlements = async ({
         return {
             group: groupInfo,
             summary: summaryInfo,
-            settlements: settlements,
+            settlements: settlementsToShow,
             totalBalances: totalBalances,
-            isAllSettled: settlements.length === 0
+            isAllSettled: currentSettlements.length === 0, // Based on actual current settlements, not historical
+            hasSettlementHistory: settlementHistory.length > 0,
+            totalHistoricalSettlements: settlementHistory.length
         };
 
     } catch (error: any) {
@@ -1102,6 +1156,19 @@ const settleDebt = async ({
         group.groupExpenses.push(settlementExpense);
 
         await group.save();
+
+        // Save settlement to history for permanent record
+        const settlementHistoryRecord = new GroupSettlementHistoryModel({
+            groupId: parseInt(groupId),
+            fromEmail: fromEmail,
+            toEmail: toEmail,
+            amount: amount,
+            settledAt: new Date(),
+            settledBy: user_id,
+            transactionType: 'individual'
+        });
+
+        await settlementHistoryRecord.save();
 
         // Return updated settlement data
         const updatedSettlements = await getGroupSettlements({ groupId, user_id });
@@ -1202,6 +1269,10 @@ const settleMultipleDebts = async ({
             date: Date
         }> = [];
 
+        // Generate batch ID for grouping multiple settlements
+        const batchId = generateBatchId();
+        const settlementHistoryRecords = [];
+
         for (const settlement of settlements) {
             const { fromEmail, toEmail, amount } = settlement;
 
@@ -1229,6 +1300,18 @@ const settleMultipleDebts = async ({
             group.groupExpenses = group.groupExpenses || [];
             group.groupExpenses.push(settlementExpense);
 
+            // Prepare settlement history record
+            settlementHistoryRecords.push({
+                groupId: parseInt(groupId),
+                fromEmail: fromEmail,
+                toEmail: toEmail,
+                amount: amount,
+                settledAt: new Date(),
+                settledBy: user_id,
+                transactionType: 'multiple',
+                batchId: batchId
+            });
+
             settlementResults.push({
                 from: fromEmail,
                 to: toEmail,
@@ -1238,6 +1321,11 @@ const settleMultipleDebts = async ({
         }
 
         await group.save();
+
+        // Save all settlement history records in batch
+        if (settlementHistoryRecords.length > 0) {
+            await GroupSettlementHistoryModel.insertMany(settlementHistoryRecords);
+        }
 
         // Return updated settlement data
         const updatedSettlements = await getGroupSettlements({ groupId, user_id });
@@ -1252,6 +1340,77 @@ const settleMultipleDebts = async ({
     } catch (error: any) {
         console.error('Error in settleMultipleDebts:', error.message);
         throw new Error(`Failed to settle multiple debts: ${error.message}`);
+    }
+};
+
+// Get settlement history for a group
+const getSettlementHistory = async ({
+    groupId,
+    user_id,
+    limit = 50
+}: {
+    groupId: string,
+    user_id: mongoose.Types.ObjectId | null,
+    limit?: number
+}) => {
+    try {
+        // Get user email for authorization
+        const userEmail = await UserModel.findById(user_id).select('email').lean().then(user => user?.email || null);
+        
+        if (!userEmail) {
+            throw new Error('User email not found');
+        }
+        
+        // Find the group and verify authorization
+        const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) }).lean();
+        
+        if (!group) {
+            throw new Error('Group not found');
+        }
+        
+        const isOwner = group.ownerEmail === userEmail;
+        const isMember = group.groupMembers?.includes(userEmail);
+        
+        if (!isOwner && !isMember) {
+            throw new Error('You are not authorized to view this group settlement history');
+        }
+
+        // Get settlement history
+        const history = await GroupSettlementHistoryModel.find({
+            groupId: parseInt(groupId)
+        })
+        .populate('settledBy', 'name email')
+        .sort({ settledAt: -1 })
+        .limit(limit)
+        .lean();
+
+        // Group by batch for better display
+        const groupedHistory: { [key: string]: any[] } = {};
+        const individualHistory: any[] = [];
+
+        history.forEach(record => {
+            if (record.transactionType === 'multiple' && record.batchId) {
+                if (!groupedHistory[record.batchId]) {
+                    groupedHistory[record.batchId] = [];
+                }
+                groupedHistory[record.batchId].push(record);
+            } else {
+                individualHistory.push(record);
+            }
+        });
+
+        return {
+            groupId: parseInt(groupId),
+            groupName: group.groupName,
+            totalRecords: history.length,
+            batchSettlements: Object.values(groupedHistory),
+            individualSettlements: individualHistory,
+            allHistory: history
+        };
+
+    } catch (error: any) {
+        console.error('Error in getSettlementHistory:', error.message);
+        throw new Error(`Failed to get settlement history: ${error.message}`);
     }
 };
 
@@ -1742,6 +1901,7 @@ const groupTransactionServices = {
     getGroupSettlements,
     settleDebt,
     settleMultipleDebts,
+    getSettlementHistory,
     deleteGroup,
     removeMemberFromGroup,
     updateGroupName,

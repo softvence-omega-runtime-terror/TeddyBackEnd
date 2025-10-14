@@ -9,6 +9,12 @@ import { userRole } from '../../constants';
 import updateGroupAndTransactions from './userUtill';
 import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
 import { GroupTransactionModel } from '../groupTransection/groupTransection.model';
+import { 
+  DEFAULT_EXPENSE_CATEGORIES, 
+  DEFAULT_INCOME_CATEGORIES, 
+  DEFAULT_GROUP_EXPENSE_CATEGORIES, 
+  DEFAULT_GROUP_INCOME_CATEGORIES 
+} from './defaultCategories';
 
 const createUser = async (payload: Partial<TUser>) => {
 
@@ -106,6 +112,10 @@ const createUser = async (payload: Partial<TUser>) => {
     );
     console.log('Group and transaction update result:', updateResult);
 
+    // Create default categories for the new user
+    await createDefaultCategories(user._id, session);
+    console.log('Default categories created for user:', user._id);
+
     // Commit the transaction
     await session.commitTransaction();
     console.log('Transaction committed');
@@ -168,6 +178,79 @@ const setFCMToken = async (user_id: Types.ObjectId, fcmToken: string) => {
   );
 
   return result;
+};
+
+// Check if user has any categories
+const checkUserHasCategories = async (userId: Types.ObjectId) => {
+  try {
+    const count = await CategoryModel.countDocuments({ user_id: userId });
+    console.log(`User ${userId} has ${count} existing categories`);
+    return count > 0;
+  } catch (error: any) {
+    console.error('Error checking user categories:', error);
+    return false;
+  }
+};
+
+// Function to create default categories for a new user
+const createDefaultCategories = async (userId: Types.ObjectId, session?: any) => {
+  try {
+    const categoriesToCreate: any[] = [];
+
+    // Create personal expense categories
+    DEFAULT_EXPENSE_CATEGORIES.forEach(category => {
+      categoriesToCreate.push({
+        name: category.name,
+        type: category.type,
+        transactionType: category.transactionType,
+        user_id: userId,
+      });
+    });
+
+    // Create personal income categories
+    DEFAULT_INCOME_CATEGORIES.forEach(category => {
+      categoriesToCreate.push({
+        name: category.name,
+        type: category.type,
+        transactionType: category.transactionType,
+        user_id: userId,
+      });
+    });
+
+    // Create group expense categories
+    DEFAULT_GROUP_EXPENSE_CATEGORIES.forEach(category => {
+      categoriesToCreate.push({
+        name: category.name,
+        type: category.type,
+        transactionType: category.transactionType,
+        user_id: userId,
+      });
+    });
+
+    // Create group income categories
+    DEFAULT_GROUP_INCOME_CATEGORIES.forEach(category => {
+      categoriesToCreate.push({
+        name: category.name,
+        type: category.type,
+        transactionType: category.transactionType,
+        user_id: userId,
+      });
+    });
+
+    // Create categories in bulk
+    console.log(`About to create ${categoriesToCreate.length} categories for user ${userId}`);
+    console.log('Sample category data:', categoriesToCreate[0]);
+    
+    const createOptions = session ? { session, ordered: true } : {};
+    const createdCategories = await CategoryModel.create(categoriesToCreate, createOptions);
+    
+    console.log(`Successfully created ${createdCategories.length} default categories for user ${userId}`);
+    console.log('Sample created category:', createdCategories[0]);
+    return createdCategories;
+  } catch (error: any) {
+    console.error('Error creating default categories:', error);
+    throw new Error('Failed to create default categories: ' + error.message);
+  }
 };
 
 const getAllUsers = async () => {
@@ -566,7 +649,7 @@ const deleteFriend = async (userId: Types.ObjectId, friendEmail: string) => {
 
   if (isGroupMember) {
     throw new Error('You can’t delete them yet. To delete them, they must be removed from your group, or you can delete the entire group.');
-    
+
   } else {
     const profile = await ProfileModel.findOne({ user_id: userId });
     if (!profile) {
@@ -614,13 +697,14 @@ const updateFriend = async (userId: Types.ObjectId, friendEmail: string, updateD
 };
 
 // Category Management Services
+// for expense categories
 const createCategoryPersonal = async (userId: Types.ObjectId, categoryData: TCategory) => {
   try {
-    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'personal' });
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'personal', transactionType: 'expense' });
     if (isExist) {
       throw new Error('Category already exists');
     }
-    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'personal' });
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'personal', transactionType: 'expense' });
     await newCategory.save();
     return { message: 'Personal category created successfully', category: newCategory };
   } catch (error) {
@@ -628,13 +712,29 @@ const createCategoryPersonal = async (userId: Types.ObjectId, categoryData: TCat
   }
 };
 
-const createCategoryGroup = async (userId: Types.ObjectId, categoryData: TCategory) => {
+// for income categories
+const createIncomeCategoryPersonal = async (userId: Types.ObjectId, categoryData: TCategory) => {
   try {
-    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'group' });
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'personal', transactionType: 'income' });
     if (isExist) {
       throw new Error('Category already exists');
     }
-    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'group' });
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'personal', transactionType: 'income' });
+    await newCategory.save();
+    return { message: 'Personal category created successfully', category: newCategory };
+  } catch (error) {
+    throw new Error('Error creating personal category: ' + (error as any).message);
+  }
+};
+
+// for expense categories
+const createCategoryGroup = async (userId: Types.ObjectId, categoryData: TCategory) => {
+  try {
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'group', transactionType: 'expense' });
+    if (isExist) {
+      throw new Error('Category already exists');
+    }
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'group', transactionType: 'expense' });
     await newCategory.save();
     return { message: 'Group category created successfully', category: newCategory };
   } catch (error) {
@@ -642,11 +742,50 @@ const createCategoryGroup = async (userId: Types.ObjectId, categoryData: TCatego
   }
 };
 
-const getAllCategories = async (userId: Types.ObjectId) => {
+
+// for income categories
+const createIncomeCategoryGroup = async (userId: Types.ObjectId, categoryData: TCategory) => {
   try {
-    const categories = await CategoryModel.find({ user_id: userId });
+    const isExist = await CategoryModel.findOne({ name: categoryData.name, user_id: userId, type: 'group', transactionType: 'income' });
+    if (isExist) {
+      throw new Error('Category already exists');
+    }
+    const newCategory = new CategoryModel({ ...categoryData, user_id: userId, type: 'group', transactionType: 'income' });
+    await newCategory.save();
+    return { message: 'Group category created successfully', category: newCategory };
+  } catch (error) {
+    throw new Error('Error creating group category: ' + (error as any).message);
+  }
+};
+
+const getAllCategories = async (
+  userId: Types.ObjectId, 
+  filters?: { 
+    type?: 'personal' | 'group';
+    transactionType?: 'income' | 'expense';
+  }
+) => {
+  try {
+    console.log('Getting categories for user:', userId, 'with filters:', filters);
+    
+    // Build query object
+    const query: any = { user_id: userId };
+    
+    // Add filters if provided
+    if (filters?.type) {
+      query.type = filters.type;
+    }
+    if (filters?.transactionType) {
+      query.transactionType = filters.transactionType;
+    }
+    
+    console.log('Final query:', query);
+    const categories = await CategoryModel.find(query);
+    console.log(`Found ${categories.length} categories for user ${userId}`);
+    console.log('Categories:', categories.map(c => ({ name: c.name, type: c.type, transactionType: c.transactionType })));
     return categories;
   } catch (error) {
+    console.error('Error in getAllCategories:', error);
     throw new Error('Error retrieving categories: ' + (error as any).message);
   }
 };
@@ -742,6 +881,10 @@ const userServices = {
   updateFriend,
 
   // Category Management Services
+  checkUserHasCategories,
+  createDefaultCategories,
+  createIncomeCategoryPersonal,
+  createIncomeCategoryGroup,
   createCategoryPersonal,
   createCategoryGroup,
   getAllCategories,

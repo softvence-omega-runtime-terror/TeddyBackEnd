@@ -71,15 +71,15 @@ const ProfileSchema = new Schema<TProfile>(
     emailNotification: { type: Boolean, required: true, default: false },
     notificationList_id: { type: Schema.Types.ObjectId, required: false, ref: 'NotificationList' },
     chatList_id: { type: Schema.Types.ObjectId, required: false, ref: 'ChatCollectionList' },
-    preferredCurrency: { 
-      type: String, 
-      enum: ['USD', 'EUR', 'SGD', 'GBP', 'AUD'], 
+    preferredCurrency: {
+      type: String,
+      enum: ['USD', 'EUR', 'SGD', 'GBP', 'AUD'],
       default: 'USD',
-      required: false 
+      required: false
     },
     language: {
       type: String,
-      enum: ['en','id','ms','ko','zh','ja'],
+      enum: ['en', 'id', 'ms', 'ko', 'zh', 'ja'],
       required: false,
       default: 'en'
     },
@@ -91,6 +91,7 @@ const ProfileSchema = new Schema<TProfile>(
 const CategorySchema = new Schema<TCategory>({
   name: { type: String, required: true },
   type: { type: String, enum: ['personal', 'group'] },
+  transactionType: { type: String, enum: ['income', 'expense'], required: true },
   user_id: { type: Schema.Types.ObjectId, required: true, ref: 'UserCollection' }
 });
 

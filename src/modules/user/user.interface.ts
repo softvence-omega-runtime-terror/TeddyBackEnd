@@ -61,11 +61,11 @@ export type TProfile = {
   maxGroups?: number; // Optional to align with schema
   totalCreatedGroups?: number;
   groupList?: Types.ObjectId[]; // Optional to align with schema
-  assistantType : "Supportive_Friendly" | "SarcasticTruth-Teller";
-  startDate?:Date;
-  endDate?:Date;
-  plan_id?:Types.ObjectId;
-  planPurchaseDate?:Date;
+  assistantType: "Supportive_Friendly" | "SarcasticTruth-Teller";
+  startDate?: Date;
+  endDate?: Date;
+  plan_id?: Types.ObjectId;
+  planPurchaseDate?: Date;
   img?: string;
   emailNotification: boolean;
   user_id: Types.ObjectId;
@@ -79,6 +79,7 @@ export type TProfile = {
 export type TCategory = {
   name: String;
   type: 'personal' | 'group';
+  transactionType: 'income' | 'expense';
   user_id: Types.ObjectId;
 };
 

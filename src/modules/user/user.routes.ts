@@ -126,6 +126,18 @@ userRoutes.patch(
 
 
 // Category Management Routes
+userRoutes.get(
+  '/categories/debug',
+  auth([userRole.user]),
+  userController.debugCategories,
+);
+
+userRoutes.post(
+  '/categories/initialize-defaults',
+  auth([userRole.user]),
+  userController.initializeDefaultCategories,
+);
+
 userRoutes.post(
   '/categories/personal',
   auth([userRole.user]),
@@ -133,9 +145,21 @@ userRoutes.post(
 );
 
 userRoutes.post(
+  '/categories/income/personal',
+  auth([userRole.user]),
+  userController.createIncomeCategoryPersonal,
+);
+
+userRoutes.post(
   '/categories/group',
   auth([userRole.user]),
   userController.createCategoryGroup,
+);
+
+userRoutes.post(
+  '/categories/income/group',
+  auth([userRole.user]),
+  userController.createIncomeCategoryGroup,
 );
 
 userRoutes.get(

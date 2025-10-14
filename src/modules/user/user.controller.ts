@@ -506,6 +506,63 @@ const unblockUserController = catchAsync(async (req, res) => {
 
 // Category Management
 
+const debugCategories = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  
+  console.log('=== DEBUG: Category Debug Info ===');
+  console.log('User ID from token:', user_id);
+  console.log('Converted User ID:', converted_user_id);
+  
+  // Check categories count
+  const hasCategories = await userServices.checkUserHasCategories(converted_user_id);
+  const allCategories = await userServices.getAllCategories(converted_user_id);
+  
+  globalResponseHandler(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Debug information retrieved',
+    data: {
+      userId: converted_user_id,
+      hasCategories,
+      categoryCount: allCategories.length,
+      categories: allCategories,
+    },
+  });
+});
+
+const initializeDefaultCategories = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  
+  // Check if user already has categories
+  const hasCategories = await userServices.checkUserHasCategories(converted_user_id);
+  if (hasCategories) {
+    globalResponseHandler(res, {
+      statusCode: 200,
+      success: true,
+      message: 'User already has categories. Default categories not created.',
+      data: null,
+    });
+    return;
+  }
+  
+  const result = await userServices.createDefaultCategories(converted_user_id);
+
+  globalResponseHandler(res, {
+    statusCode: 201,
+    success: true,
+    message: 'Default categories initialized successfully',
+    data: result,
+  });
+});
+
 const createCategoryPersonal = catchAsync(async (req, res) => {
   const user_id = req.user.id;
   const converted_user_id = idConverter(user_id);
@@ -513,6 +570,22 @@ const createCategoryPersonal = catchAsync(async (req, res) => {
     throw Error('id conversation failed');
   }
   const result = await userServices.createCategoryPersonal(converted_user_id, req.body);
+
+  globalResponseHandler(res, {
+    statusCode: 201,
+    success: true,
+    message: 'Category created successfully',
+    data: result,
+  });
+});
+
+const createIncomeCategoryPersonal = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.createIncomeCategoryPersonal(converted_user_id, req.body);
 
   globalResponseHandler(res, {
     statusCode: 201,
@@ -538,13 +611,45 @@ const createCategoryGroup = catchAsync(async (req, res) => {
   });
 });
 
+const createIncomeCategoryGroup = catchAsync(async (req, res) => {
+  const user_id = req.user.id;
+  const converted_user_id = idConverter(user_id);
+  if (!converted_user_id) {
+    throw Error('id conversation failed');
+  }
+  const result = await userServices.createIncomeCategoryGroup(converted_user_id, req.body);
+
+  globalResponseHandler(res, {
+    statusCode: 201,
+    success: true,
+    message: 'Category created successfully',
+    data: result,
+  });
+});
+
+
 const getAllCategories = catchAsync(async (req, res) => {
   const user_id = req.user.id;
   const converted_user_id = idConverter(user_id);
   if (!converted_user_id) {
     throw Error('id conversation failed');
   }
-  const result = await userServices.getAllCategories(converted_user_id);
+  
+  // Extract query parameters for filtering
+  const { type, transactionType } = req.query;
+  
+  // Build filters object
+  const filters: { type?: 'personal' | 'group'; transactionType?: 'income' | 'expense' } = {};
+  
+  if (type && (type === 'personal' || type === 'group')) {
+    filters.type = type as 'personal' | 'group';
+  }
+  
+  if (transactionType && (transactionType === 'income' || transactionType === 'expense')) {
+    filters.transactionType = transactionType as 'income' | 'expense';
+  }
+  
+  const result = await userServices.getAllCategories(converted_user_id, Object.keys(filters).length > 0 ? filters : undefined);
 
   globalResponseHandler(res, {
     statusCode: 200,
@@ -633,8 +738,12 @@ const userController = {
   addFriend,
   getFriends,
   deleteFriend,
+  debugCategories,
+  initializeDefaultCategories,
   createCategoryPersonal,
   createCategoryGroup,
+  createIncomeCategoryPersonal,
+  createIncomeCategoryGroup,
   getAllCategories,
   getAllCategoriesForPersonal,
   getAllCategoriesForGroup,
