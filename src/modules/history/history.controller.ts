@@ -30,7 +30,13 @@ export const getHistory = async (req: Request, res: Response) => {
     }
 
     const history = await History.find({ userId }).sort({ createdAt: -1 }); // newest first
-    res.status(200).json(history);
+    const historyCount = history?.length;
+
+    res.status(200).json({
+      data: history,
+      historyCount,
+      message: "History retrieved successfully",
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }

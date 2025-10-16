@@ -8,6 +8,7 @@ import { sendEmail } from '../../util/sendEmail';
 import userServices from '../user/user.service';
 import { Types } from 'mongoose';
 import { error } from 'console';
+import { UserSubscriptionModel } from '../userSubscription/userSubscription.model';
 
 const logIn = async (
   email: string,
@@ -103,6 +104,11 @@ const logIn = async (
     ...userProfile.toObject(),
   };
 
+
+  const findUserSubscription = await UserSubscriptionModel.find({ user: user._id, status: { $in: ['completed', 'active'] } }).populate('subscriptionPlan');
+
+
+
   const tokenizeData = {
     id: user._id.toHexString(),
     role: user.role,
@@ -129,7 +135,7 @@ const logIn = async (
       'you are not a verified user. You wont be able to use some services. Please verify';
   }
 
-  return { approvalToken, refreshToken, updatedUser: userWithProfile, message };
+  return { approvalToken, refreshToken, updatedUser: userWithProfile, message, findUserSubscription };
 };
 
 const logOut = async (userId: string) => {
