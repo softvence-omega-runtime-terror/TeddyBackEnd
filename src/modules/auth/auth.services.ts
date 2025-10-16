@@ -104,10 +104,8 @@ const logIn = async (
     ...userProfile.toObject(),
   };
 
-
-  const findUserSubscription = await UserSubscriptionModel.find({ user: user._id, status: { $in: ['completed', 'active'] } }).populate('subscriptionPlan');
-
-
+  const findUserSubscription = await UserSubscriptionModel.find({ user: user?._id, status: { $in: ['completed', 'active', 'pending'] } }).populate('subscriptionPlan');
+  console.log('findUserSubscription', findUserSubscription);
 
   const tokenizeData = {
     id: user._id.toHexString(),
