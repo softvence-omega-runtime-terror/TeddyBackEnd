@@ -7,7 +7,7 @@ const createPlan = async (data: Partial<TPlan>) => {
     try {
 
         const findPlan = await PlanModel.findOne({ name: data.name, price: data.price });
-        
+
         if (findPlan) {
             throw new Error("Plan with the same name and price already exists");
         };
@@ -45,6 +45,7 @@ const createPlan = async (data: Partial<TPlan>) => {
         const planData = {
             ...data,
             stripePriceId: price.id,
+            cancel_at_period_end: true
         };
 
         const plan = await PlanModel.create(planData);
