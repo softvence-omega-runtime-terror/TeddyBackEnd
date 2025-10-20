@@ -40,7 +40,7 @@ function calculateDiscountedPrice(originalPrice: number, discountType?: string, 
 
     // Ensure final price is not negative
     finalPrice = Math.max(finalPrice, 0);
-    
+
     return {
         originalPrice,
         discountAmount: Math.round(discountAmount * 100) / 100, // Round to 2 decimal places
@@ -77,10 +77,10 @@ export async function createCheckoutSession(params: {
                 price_data: {
                     currency: "usd",
                     unit_amount: Math.round(priceCalculation.finalPrice * 100), // Discounted price in cents
-                    product_data: { 
+                    product_data: {
                         name: plan.name,
-                        description: priceCalculation.discountAmount > 0 
-                            ? `Original: $${priceCalculation.originalPrice}, Discount: $${priceCalculation.discountAmount}` 
+                        description: priceCalculation.discountAmount > 0
+                            ? `Original: $${priceCalculation.originalPrice}, Discount: $${priceCalculation.discountAmount}`
                             : undefined
                     },
                     recurring: plan.subscription
@@ -135,8 +135,8 @@ export async function createCheckoutSession(params: {
         endDate: plan.subscription ? null : plan?.billingInterval === 'year'
             ? new Date(new Date().setFullYear(new Date().getFullYear() + 1))
             : plan?.billingInterval === 'month'
-            ? new Date(new Date().setMonth(new Date().getMonth() + 1))
-            : null,
+                ? new Date(new Date().setMonth(new Date().getMonth() + 1))
+                : null,
         currency: "USD",
     });
 
@@ -153,7 +153,7 @@ export async function handleStripeWebhook(event: any) {
             case "checkout.session.completed": {
                 const session = event.data.object as any;
                 console.log("Processing checkout.session.completed for session:", session.id);
-                
+
                 // First try to find by session/transaction ID (most reliable)
                 let sub = await UserSubscriptionModel.findOne({
                     transactionId: session.id,
@@ -188,7 +188,7 @@ export async function handleStripeWebhook(event: any) {
                 if (session.subscription) {
                     sub.stripeSubscriptionId = session.subscription;
                 }
-                
+
                 if (session.payment_intent) {
                     sub.stripePaymentIntentId = session.payment_intent;
                 }
@@ -198,13 +198,34 @@ export async function handleStripeWebhook(event: any) {
                     if (session.mode === 'subscription') {
                         sub.status = 'active';
                         sub.startDate = new Date();
-                        // For subscriptions, endDate should be null (ongoing)
-                        sub.endDate = null;
+                        const plan = await PlanModel.findById(sub.subscriptionPlan);
+                        if (plan) {
+                            if (plan.billingInterval === 'month') {
+                                sub.endDate = new Date(new Date().setMonth(new Date().getMonth() + 1));
+                            } else if (plan.billingInterval === 'year') {
+                                sub.endDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+                            } else {
+                                sub.endDate = new Date();
+                            }
+                        } else {
+                            sub.endDate = new Date();
+                        }
                     } else if (session.mode === 'payment') {
                         sub.status = 'completed';
                         sub.startDate = new Date();
-                        // For one-time payments, set endDate to current date
-                        sub.endDate = new Date();
+
+                        const plan = await PlanModel.findById(sub.subscriptionPlan);
+                        if (plan) {
+                            if (plan.billingInterval === 'month') {
+                                sub.endDate = new Date(new Date().setMonth(new Date().getMonth() + 1));
+                            } else if (plan.billingInterval === 'year') {
+                                sub.endDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+                            } else {
+                                sub.endDate = new Date();
+                            }
+                        } else {
+                            sub.endDate = new Date();
+                        }
                     }
                 } else {
                     console.warn("Payment not completed for session:", session.id);
@@ -219,7 +240,7 @@ export async function handleStripeWebhook(event: any) {
             case "invoice.payment_succeeded": {
                 const invoice = event.data.object as any;
                 console.log("Processing invoice.payment_succeeded for subscription:", invoice.subscription);
-                
+
                 if (invoice.subscription) {
                     const sub = await UserSubscriptionModel.findOne({
                         stripeSubscriptionId: invoice.subscription,
@@ -239,7 +260,7 @@ export async function handleStripeWebhook(event: any) {
             case "invoice.payment_failed": {
                 const invoice = event.data.object as any;
                 console.log("Processing invoice.payment_failed for subscription:", invoice.subscription);
-                
+
                 if (invoice.subscription) {
                     const sub = await UserSubscriptionModel.findOne({
                         stripeSubscriptionId: invoice.subscription,
@@ -257,7 +278,7 @@ export async function handleStripeWebhook(event: any) {
             case "customer.subscription.deleted": {
                 const subscription = event.data.object as any;
                 console.log("Processing customer.subscription.deleted for subscription:", subscription.id);
-                
+
                 const sub = await UserSubscriptionModel.findOne({
                     stripeSubscriptionId: subscription.id,
                 });
@@ -289,10 +310,10 @@ export async function verifyPayment(session_id: string) {
         const session = await stripe.checkout.sessions.retrieve(session_id);
 
         if (session.payment_status !== 'paid') {
-            return { 
-                success: false, 
+            return {
+                success: false,
                 message: 'Payment not completed',
-                status: session.payment_status 
+                status: session.payment_status
             };
         }
 
@@ -300,9 +321,9 @@ export async function verifyPayment(session_id: string) {
         const planId = session.metadata?.planId;
 
         if (!userId || !planId) {
-            return { 
-                success: false, 
-                message: 'Invalid session metadata' 
+            return {
+                success: false,
+                message: 'Invalid session metadata'
             };
         }
 
@@ -314,14 +335,14 @@ export async function verifyPayment(session_id: string) {
         }).populate('subscriptionPlan');
 
         if (!subscription) {
-            return { 
-                success: false, 
-                message: 'Subscription record not found' 
+            return {
+                success: false,
+                message: 'Subscription record not found'
             };
         }
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             message: 'Payment verified successfully',
             data: {
                 sessionId: session_id,
@@ -341,9 +362,9 @@ export async function verifyPayment(session_id: string) {
         };
     } catch (error: any) {
         console.error('Payment verification failed:', error);
-        return { 
-            success: false, 
-            message: error.message || 'Payment verification failed' 
+        return {
+            success: false,
+            message: error.message || 'Payment verification failed'
         };
     }
 }

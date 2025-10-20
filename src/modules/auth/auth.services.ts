@@ -9,6 +9,7 @@ import userServices from '../user/user.service';
 import { Types } from 'mongoose';
 import { error } from 'console';
 import { UserSubscriptionModel } from '../userSubscription/userSubscription.model';
+import { PlanModel } from '../plan/plan.model';
 
 const logIn = async (
   email: string,
@@ -104,8 +105,9 @@ const logIn = async (
     ...userProfile.toObject(),
   };
 
-  const findUserSubscription = await UserSubscriptionModel.find({ user: user?._id, status: { $in: ['completed', 'active', 'pending'] } }).populate('subscriptionPlan');
-  console.log('findUserSubscription', findUserSubscription);
+  const findUserSubscription = await UserSubscriptionModel.find({ user: user?._id, status: { $in: ['completed', 'active', 'pending'] }, startDate: { $exists: true }, endDate: { $gte: new Date() } });
+
+  const isSubscribed = findUserSubscription && findUserSubscription.length > 0 ? true : false;
 
   const tokenizeData = {
     id: user._id.toHexString(),
@@ -133,7 +135,7 @@ const logIn = async (
       'you are not a verified user. You wont be able to use some services. Please verify';
   }
 
-  return { approvalToken, refreshToken, updatedUser: userWithProfile, message, findUserSubscription };
+  return { approvalToken, refreshToken, updatedUser: userWithProfile, message, isSubscribed };
 };
 
 const logOut = async (userId: string) => {
