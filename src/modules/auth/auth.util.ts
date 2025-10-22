@@ -54,7 +54,7 @@ const sendOTPViaEmail = async (payload: Partial<TUser>) => {
 
   const html = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-    <h2 style="color: #2c3e50;">Day Moon Designs Verification Code</h2>
+    <h2 style="color: #2c3e50;">Sliceup Verification Code</h2>
     <p style="font-size: 16px;">Hello 👋,</p>
     <p style="font-size: 16px;">
       Your One-Time Password (OTP) is:
