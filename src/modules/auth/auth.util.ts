@@ -87,6 +87,7 @@ const sendOTPViaEmail = async (payload: Partial<TUser>) => {
     'OTP from Day Moon Designs',
     html,
   );
+  console.log('Email sent with OTP:', { sendEmailWithOtp });
   if (!sendEmailWithOtp.success) {
     throw new Error('email sending failed');
   }
