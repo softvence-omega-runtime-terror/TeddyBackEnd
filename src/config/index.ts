@@ -14,12 +14,12 @@ const config = {
   jwt_refresh_Token_secret: process.env.JWT_REFRESH_TOKEN_SECRET as string,
   refresh_expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN as string,
 
-  // company_gmail: process.env.COMPANY_GMAIL as string,
-  // gmail_app_password: process.env.GMAIL_APP_PASSWORD as string,
+  company_gmail: process.env.COMPANY_GMAIL as string,
+  gmail_app_password: process.env.GMAIL_APP_PASSWORD as string,
 
-  sendgrid_api_key: process.env.SENDGRID_API_KEY || '',
-  company_email: process.env.COMPANY_EMAIL || 'noreply@yourapp.com',
-  company_name: process.env.COMPANY_NAME || 'Your App Name',
+  // sendgrid_api_key: process.env.SENDGRID_API_KEY || '',
+  // company_email: process.env.COMPANY_EMAIL || 'noreply@yourapp.com',
+  // company_name: process.env.COMPANY_NAME || 'Your App Name',
 
   otp_token_duration: process.env.OTP_TOKEN_DURATION as string,
 
