@@ -3,7 +3,6 @@ import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
 import { GroupSettlementHistoryModel } from "./groupSettlementHistory.model";
-import idConverter from "../../util/idConverter";
 
 // Simple UUID generator function
 const generateBatchId = () => {
@@ -127,10 +126,11 @@ const getGroupStatus = async ({
 
 
             if (
-                expense.isSettledItem === true &&
-                expense.shareWith.shares.find(s => s.memberEmail === userEmail)
+                (expense as any).isSettledItem === true &&
+                expense.shareWith?.type === 'custom' &&
+                expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
             ) {
-                const share = expense.shareWith.shares.find(s => s.memberEmail === userEmail);
+                const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
                 if (share) {
                     userPaidInExpense = userPaidInExpense - share.amount;
                 }
@@ -142,9 +142,9 @@ const getGroupStatus = async ({
 
             // Calculate user's share for this expense
             let userOwesInExpense = 0;
-            if (expense.isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+            if ((expense as any).isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
                 userOwesInExpense = expense.totalExpenseAmount / expense.shareWith.members.length;
-            } else if (expense.isSettledItem === false && expense.shareWith.type === 'custom') {
+            } else if ((expense as any).isSettledItem === false && expense.shareWith.type === 'custom') {
                 const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
                 userOwesInExpense = userShare?.amount || 0;
             }
