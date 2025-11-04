@@ -47,10 +47,11 @@ const groupTransactionSchema = new Schema<TGroupTransaction>({
                     }],
                     required: function (this: any) { return this.shareWith.type === 'custom'; }
                 }
-            }
+            },
+            isSettledItem: { type: Boolean, default: false },
         }],
         default: []
     }
-},{timestamps:true});
+}, { timestamps: true });
 
 export const GroupTransactionModel = model<TGroupTransaction>('GroupTransaction', groupTransactionSchema);

@@ -41,8 +41,6 @@ groupTransactionRouter.get('/:groupId/settlements', auth([userRole.user]), local
 groupTransactionRouter.post('/:groupId/settle-multiple-debts', auth([userRole.user]), localeMiddleware, groupTransactionController.settleMultipleGroupDebts);
 
 
-
-
 groupTransactionRouter.post('/:groupId/settle-debt', auth([userRole.user]), localeMiddleware, groupTransactionController.settleGroupDebt);
 
 
