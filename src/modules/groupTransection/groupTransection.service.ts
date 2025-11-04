@@ -14,6 +14,8 @@ const getGroupStatus = async ({
     groupId,
     user_id
 }: {
+
+    
     groupId: string,
     user_id: mongoose.Types.ObjectId | null
 }) => {
