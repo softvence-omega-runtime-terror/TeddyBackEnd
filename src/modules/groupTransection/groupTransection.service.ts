@@ -14,8 +14,6 @@ const getGroupStatus = async ({
     groupId,
     user_id
 }: {
-
-    
     groupId: string,
     user_id: mongoose.Types.ObjectId | null
 }) => {
@@ -226,6 +224,7 @@ const getGroupStatus = async ({
             })).sort((a, b) => b.involved.amount - a.involved.amount),
             personWise: Object.keys(personBreakdown).map(email => {
                 const memberTotalInvolved = personBreakdown[email].totalInvolved;
+                console.log(personBreakdown[email])
                 const memberPercentage = totalGroupExpenses > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
 
                 // Calculate user's expense related to this person (how much user paid for expenses involving this person)
@@ -251,17 +250,30 @@ const getGroupStatus = async ({
                     }
 
                     // If this person is involved in the expense, calculate user's payment for this expense
+                    // if (personInvolvedInExpense) {
+                    //     if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
+                    //         userExpenseForThisPerson += expense.paidBy.amount;
+                    //     } else if (expense.paidBy.type === 'multiple') {
+                    //         const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
+                    //         userExpenseForThisPerson += userPayment?.amount || 0;
+                    //     }
+                    // }
+
+
                     if (personInvolvedInExpense) {
-                        if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                            userExpenseForThisPerson += expense.paidBy.amount;
-                        } else if (expense.paidBy.type === 'multiple') {
-                            const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                            userExpenseForThisPerson += userPayment?.amount || 0;
+                        if ((expense as any).isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+                            userExpenseForThisPerson = expense.totalExpenseAmount / expense.shareWith.members.length;
+                        } else if ((expense as any).isSettledItem === false && expense.shareWith.type === 'custom') {
+                            const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
+                            userExpenseForThisPerson = userShare?.amount || 0;
                         }
                     }
                 }
 
-                userExpensePercentageForThisPerson = memberTotalInvolved > 0 ? (userExpenseForThisPerson / memberTotalInvolved) * 100 : 0;
+                userExpensePercentageForThisPerson = memberTotalInvolved > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
+
+
+                console.log('Person:', email, 'User Expense:', userExpenseForThisPerson, 'Total Involved:', totalGroupExpenses, 'Percentage:', userExpensePercentageForThisPerson);
 
                 return {
                     memberEmail: email,
