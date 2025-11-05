@@ -3,6 +3,7 @@ import { GroupTransactionModel } from "./groupTransection.model";
 import { UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
 import { GroupSettlementHistoryModel } from "./groupSettlementHistory.model";
+import idConverter from "../../util/idConverter";
 
 // Simple UUID generator function
 const generateBatchId = () => {
@@ -14,8 +15,6 @@ const getGroupStatus = async ({
     groupId,
     user_id
 }: {
-
-    
     groupId: string,
     user_id: mongoose.Types.ObjectId | null
 }) => {
@@ -96,10 +95,7 @@ const getGroupStatus = async ({
 
         // Process each expense
         for (const expense of group.groupExpenses || []) {
-
-            if ((expense as any).isSettledItem !== true) {
-                totalGroupExpenses += expense.totalExpenseAmount;
-            }
+            totalGroupExpenses += expense.totalExpenseAmount;
 
             const categoryName = (expense.category as any)?.name || 'Unknown';
 
@@ -126,33 +122,19 @@ const getGroupStatus = async ({
                 userPaidInExpense = userPayment?.amount || 0;
             }
 
-
-            if (
-                (expense as any).isSettledItem === true &&
-                expense.shareWith?.type === 'custom' &&
-                expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
-            ) {
-                const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
-                if (share) {
-                    userPaidInExpense = userPaidInExpense - share.amount;
-                }
-            }
-
-
             userTotalPaid += userPaidInExpense;
             categoryBreakdown[categoryName].userPaid += userPaidInExpense;
 
             // Calculate user's share for this expense
             let userOwesInExpense = 0;
-            if ((expense as any).isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+            if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
                 userOwesInExpense = expense.totalExpenseAmount / expense.shareWith.members.length;
-            } else if ((expense as any).isSettledItem === false && expense.shareWith.type === 'custom') {
+            } else if (expense.shareWith.type === 'custom') {
                 const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
                 userOwesInExpense = userShare?.amount || 0;
             }
 
             userTotalOwes += userOwesInExpense;
-
             categoryBreakdown[categoryName].userOwes += userOwesInExpense;
 
             // Track total involvement for each person who paid
@@ -196,17 +178,17 @@ const getGroupStatus = async ({
                 groupName: group.groupName,
                 ownerEmail: group.ownerEmail,
                 totalMembers: allMembers.length,
-                totalExpenses: parseInt(totalGroupExpenses.toString()),
+                totalExpenses: totalGroupExpenses
             },
             summary: {
                 involvedCurrency: involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'Mixed',
-                involvedAmount: parseInt(userTotalOwes.toString()),
+                involvedAmount: userTotalOwes,
                 myExpensesPercentage: parseFloat(userInvolvementPercentage.toFixed(2)),
                 myExpensesCurrency: involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'Mixed',
-                myExpensesAmount: parseInt(userTotalPaid.toString()),
+                myExpensesAmount: userTotalPaid,
                 netBalance: {
-                    amount: Math.floor(Math.abs(userBalance.net)),
-                    status: Math.floor(userBalance.net) > 0 ? 'you_are_owed' : Math.floor(userBalance.net) < 0 ? 'you_owe' : 'settled',
+                    amount: Math.abs(userBalance.net),
+                    status: userBalance.net > 0 ? 'you_are_owed' : userBalance.net < 0 ? 'you_owe' : 'settled',
                     currency: involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'Mixed'
                 }
             },

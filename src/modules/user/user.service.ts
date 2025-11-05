@@ -9,11 +9,11 @@ import { userRole } from '../../constants';
 import updateGroupAndTransactions from './userUtill';
 import { ExpenseOrIncomeGroupModel } from '../incomeAndExpances/incomeAndexpence.model';
 import { GroupTransactionModel } from '../groupTransection/groupTransection.model';
-import { 
-  DEFAULT_EXPENSE_CATEGORIES, 
-  DEFAULT_INCOME_CATEGORIES, 
-  DEFAULT_GROUP_EXPENSE_CATEGORIES, 
-  DEFAULT_GROUP_INCOME_CATEGORIES 
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_INCOME_CATEGORIES,
+  DEFAULT_GROUP_EXPENSE_CATEGORIES,
+  DEFAULT_GROUP_INCOME_CATEGORIES
 } from './defaultCategories';
 
 const createUser = async (payload: Partial<TUser>) => {
@@ -135,6 +135,7 @@ const createUser = async (payload: Partial<TUser>) => {
     // Send OTP
     console.log('Sending OTP via email');
     const token = await authUtil.sendOTPViaEmail(fetchedUser);
+    console.log('OTP sent, token generated', token);
 
     return {
       success: true,
@@ -147,7 +148,9 @@ const createUser = async (payload: Partial<TUser>) => {
       addedGroups: groupIds,
     };
   } catch (error: any) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     console.error('Transaction failed:', error);
 
 
@@ -161,6 +164,11 @@ const createUser = async (payload: Partial<TUser>) => {
     console.log('Session ended');
   }
 };
+
+
+
+
+
 
 const setFCMToken = async (user_id: Types.ObjectId, fcmToken: string) => {
   if (!fcmToken) {
@@ -240,10 +248,10 @@ const createDefaultCategories = async (userId: Types.ObjectId, session?: any) =>
     // Create categories in bulk
     console.log(`About to create ${categoriesToCreate.length} categories for user ${userId}`);
     console.log('Sample category data:', categoriesToCreate[0]);
-    
+
     const createOptions = session ? { session, ordered: true } : {};
     const createdCategories = await CategoryModel.create(categoriesToCreate, createOptions);
-    
+
     console.log(`Successfully created ${createdCategories.length} default categories for user ${userId}`);
     console.log('Sample created category:', createdCategories[0]);
     return createdCategories;
@@ -759,18 +767,18 @@ const createIncomeCategoryGroup = async (userId: Types.ObjectId, categoryData: T
 };
 
 const getAllCategories = async (
-  userId: Types.ObjectId, 
-  filters?: { 
+  userId: Types.ObjectId,
+  filters?: {
     type?: 'personal' | 'group';
     transactionType?: 'income' | 'expense';
   }
 ) => {
   try {
     console.log('Getting categories for user:', userId, 'with filters:', filters);
-    
+
     // Build query object
     const query: any = { user_id: userId };
-    
+
     // Add filters if provided
     if (filters?.type) {
       query.type = filters.type;
@@ -778,7 +786,7 @@ const getAllCategories = async (
     if (filters?.transactionType) {
       query.transactionType = filters.transactionType;
     }
-    
+
     console.log('Final query:', query);
     const categories = await CategoryModel.find(query);
     console.log(`Found ${categories.length} categories for user ${userId}`);

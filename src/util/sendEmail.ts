@@ -39,7 +39,6 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 };
 
 
-
 // import sgMail from '@sendgrid/mail';
 // import config from '../config';
 
