@@ -283,10 +283,13 @@ const updateUserProfile = async (
   // If imgFile is provided, upload it to Cloudinary
   if (imgFile) {
     try {
-      const fileSource: string | Buffer = imgFile.buffer || imgFile.path;
+      if (!imgFile.buffer) {
+        throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
+      }
+
       const imageUploadResult = await uploadImgToCloudinary(
         `profile-${user_id.toString()}`, // Custom name for the image
-        fileSource, // Path or buffer for the uploaded image
+        imgFile.buffer, // Buffer from memory storage
       );
 
       // Add the image URL to the updated profile data
@@ -401,18 +404,15 @@ const uploadOrChangeImg = async (
     throw new Error('User ID and image file are required.');
   }
 
-  // Determine if we're using memory storage (buffer) or disk storage (path)
-  const fileSource: string | Buffer = imgFile.buffer || imgFile.path;
-  const fileName = imgFile.buffer 
-    ? `${imgFile.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}`
-    : imgFile.filename;
-
-  if (!fileSource) {
-    throw new Error('File source not found. Check multer configuration.');
+  // Ensure we have the buffer from memory storage
+  if (!imgFile.buffer) {
+    throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
   }
 
-  // Upload new image to Cloudinary
-  const result = await uploadImgToCloudinary(fileName, fileSource);
+  const fileName = `${imgFile.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
+  // Upload new image to Cloudinary from memory buffer
+  const result = await uploadImgToCloudinary(fileName, imgFile.buffer);
 
   console.log(result);
 

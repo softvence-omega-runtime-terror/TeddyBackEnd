@@ -94,9 +94,11 @@ const createIncomeType = async (
     // Handle single file upload to Cloudinary
     let imageUrl: string | null = null;
     if (file) {
+      if (!file.buffer) {
+        throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
+      }
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const fileSource: string | Buffer = file.buffer || file.path;
-      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      const uploadResult = await uploadImgToCloudinary(imageName, file.buffer);
       imageUrl = (uploadResult as any).secure_url;
     }
 
@@ -188,9 +190,11 @@ const createExpensesType = async (
     // Handle single file upload to Cloudinary
     let imageUrl: string | null = null;
     if (file) {
+      if (!file.buffer) {
+        throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
+      }
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const fileSource: string | Buffer = file.buffer || file.path;
-      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      const uploadResult = await uploadImgToCloudinary(imageName, file.buffer);
       imageUrl = (uploadResult as any).secure_url;
     }
 
@@ -281,9 +285,11 @@ const updateIncomeType = async (user_id: Types.ObjectId, typeId: string, payload
     if (idx === -1) throw new Error('Income type not found');
     if (payload.name) doc.incomeTypeList[idx].name = payload.name;
     if (file) {
+      if (!file.buffer) {
+        throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
+      }
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const fileSource: string | Buffer = file.buffer || file.path;
-      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      const uploadResult = await uploadImgToCloudinary(imageName, file.buffer);
       doc.incomeTypeList[idx].img = (uploadResult as any).secure_url;
     }
     await doc.save();
@@ -321,9 +327,11 @@ const updateExpensesType = async (user_id: Types.ObjectId, typeId: string, paylo
     if (idx === -1) throw new Error('Expenses type not found');
     if (payload.name) doc.expenseTypeList[idx].name = payload.name;
     if (file) {
+      if (!file.buffer) {
+        throw new Error('File buffer not found. Ensure multer is using memoryStorage.');
+      }
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const fileSource: string | Buffer = file.buffer || file.path;
-      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      const uploadResult = await uploadImgToCloudinary(imageName, file.buffer);
       doc.expenseTypeList[idx].img = (uploadResult as any).secure_url;
     }
     await doc.save();

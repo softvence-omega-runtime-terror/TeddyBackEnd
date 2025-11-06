@@ -136,9 +136,7 @@
 
 
 import multer from "multer";
-import path from "path";
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs/promises";
 import config from "../config";
 
 // Configure Cloudinary once at module level
@@ -148,99 +146,77 @@ cloudinary.config({
   api_secret: config.cloudinary_api_secret,
 });
 
-// Function to delete a file from the local filesystem
-export const deleteFile = async (filePath: string) => {
-  try {
-    await fs.access(filePath); // Check if file exists
-    await fs.unlink(filePath); // Delete file
-    console.log(`File deleted successfully: ${filePath}`);
-  } catch (err: any) {
-    console.error(`Error deleting file ${filePath}: ${err.message}`);
-  }
-};
-
-// Function to upload an image to Cloudinary (accepts both file path and buffer)
+// Function to upload an image to Cloudinary (from memory buffer ONLY)
 export const uploadImgToCloudinary = async (
   name: string, 
-  filePathOrBuffer: string | Buffer
+  fileBuffer: Buffer
 ) => {
   try {
-    let uploadResult;
-
-    if (Buffer.isBuffer(filePathOrBuffer)) {
-      // Upload from memory buffer (for cloud deployments)
-      uploadResult = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            public_id: name,
-            resource_type: "image",
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        );
-        uploadStream.end(filePathOrBuffer);
-      });
-    } else {
-      // Upload from file path (for local development)
-      await fs.access(filePathOrBuffer); // Verify file exists
-      
-      uploadResult = await cloudinary.uploader.upload(filePathOrBuffer, {
-        public_id: name,
-        resource_type: "image",
-      });
-
-      // Delete local file after successful upload
-      await deleteFile(filePathOrBuffer);
+    if (!Buffer.isBuffer(fileBuffer)) {
+      throw new Error('File must be a Buffer. Ensure multer is using memoryStorage.');
     }
+
+    // Upload from memory buffer directly to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: name,
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(fileBuffer);
+    });
 
     console.log(`Image uploaded successfully: ${(uploadResult as any).secure_url}`);
     return uploadResult;
   } catch (error: any) {
     console.error(`Error uploading image to Cloudinary:`, error);
-    // Attempt to clean up file on failure if it's a file path
-    if (typeof filePathOrBuffer === 'string') {
-      await deleteFile(filePathOrBuffer);
-    }
     throw new Error(`Image upload failed: ${error.message}`);
   }
 };
 
-// Function to upload a PDF to Cloudinary
-export const uploadPdfToCloudinary = async (name: string, filePath: string) => {
+// Function to upload a PDF to Cloudinary (from memory buffer)
+export const uploadPdfToCloudinary = async (name: string, fileBuffer: Buffer) => {
   try {
-    // Verify file exists
-    await fs.access(filePath);
+    if (!Buffer.isBuffer(fileBuffer)) {
+      throw new Error('File must be a Buffer. Ensure multer is using memoryStorage.');
+    }
 
-    // Upload PDF to Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(filePath, {
-      public_id: `resumes/${name}-${Date.now()}`,
-      resource_type: "raw", // Explicitly set to "raw" for PDFs
+    // Upload PDF from memory buffer to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: `resumes/${name}-${Date.now()}`,
+          resource_type: "raw", // Explicitly set to "raw" for PDFs
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(fileBuffer);
     });
 
-    console.log(`PDF uploaded successfully: ${uploadResult.secure_url}`);
-
-    // Delete local file after successful upload
-    await deleteFile(filePath);
-
+    console.log(`PDF uploaded successfully: ${(uploadResult as any).secure_url}`);
     return uploadResult;
   } catch (error: any) {
-    console.error(`Error uploading PDF to Cloudinary for ${filePath}:`, error);
-    // Attempt to clean up file on failure
-    await deleteFile(filePath);
+    console.error(`Error uploading PDF to Cloudinary:`, error);
     throw new Error(`PDF upload failed: ${error.message}`);
   }
 };
 
-// Function to handle multiple image uploads
-export const uploadMultipleImages = async (filePaths: string[]) => {
+// Function to handle multiple image uploads (from memory buffers)
+export const uploadMultipleImages = async (fileBuffers: Buffer[]) => {
   try {
     const imageUrls: string[] = [];
 
-    for (const filePath of filePaths) {
+    for (const fileBuffer of fileBuffers) {
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, filePath);
+      const uploadResult = await uploadImgToCloudinary(imageName, fileBuffer);
       imageUrls.push((uploadResult as any).secure_url);
     }
 
@@ -251,20 +227,8 @@ export const uploadMultipleImages = async (filePaths: string[]) => {
   }
 };
 
-// Multer storage configuration - Use memory storage for cloud deployments
-const useMemoryStorage = process.env.NODE_ENV === 'production' || process.env.USE_MEMORY_STORAGE === 'true';
-
-const storage = useMemoryStorage 
-  ? multer.memoryStorage() 
-  : multer.diskStorage({
-      destination: (req, file, cb) => {
-        cb(null, path.join(process.cwd(), "uploads"));
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-      },
-    });
+// Multer storage configuration - Use memory storage ONLY (no local folder dependency)
+const storage = multer.memoryStorage();
 
 // Multer upload setup for PDF files
 export const uploadPdf = multer({
