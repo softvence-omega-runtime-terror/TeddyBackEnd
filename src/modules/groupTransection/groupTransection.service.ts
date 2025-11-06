@@ -72,6 +72,7 @@ const getGroupStatus = async ({
         const personBreakdown: {
             [email: string]: {
                 totalInvolved: number,
+                totalOwes: number,
                 userPaidToThem: number,
                 userOwesFromThem: number,
                 percentage: number,
@@ -84,6 +85,7 @@ const getGroupStatus = async ({
             if (memberEmail) { // Type guard to ensure memberEmail is not undefined
                 personBreakdown[memberEmail] = {
                     totalInvolved: 0,
+                    totalOwes: 0, // Track what this person owes (their share)
                     userPaidToThem: 0,
                     userOwesFromThem: 0,
                     percentage: 0,
@@ -155,6 +157,22 @@ const getGroupStatus = async ({
                 for (const payment of expense.paidBy.payments || []) {
                     if (personBreakdown[payment.memberEmail]) {
                         personBreakdown[payment.memberEmail].totalInvolved += payment.amount;
+                    }
+                }
+            }
+
+            // Track each person's share (what they owe) in this expense
+            if (expense.shareWith.type === 'equal') {
+                const sharePerPerson = expense.totalExpenseAmount / expense.shareWith.members.length;
+                for (const memberEmail of expense.shareWith.members) {
+                    if (personBreakdown[memberEmail]) {
+                        personBreakdown[memberEmail].totalOwes += sharePerPerson;
+                    }
+                }
+            } else if (expense.shareWith.type === 'custom') {
+                for (const share of expense.shareWith.shares || []) {
+                    if (personBreakdown[share.memberEmail]) {
+                        personBreakdown[share.memberEmail].totalOwes += share.amount;
                     }
                 }
             }
@@ -266,9 +284,10 @@ const getGroupStatus = async ({
                 };
             }).sort((a, b) => b.involved.amount - a.involved.amount),
             personWise: Object.keys(personBreakdown).map(email => {
-                const memberTotalInvolved = personBreakdown[email].totalInvolved;
+                const memberTotalOwes = personBreakdown[email].totalOwes; // What this member owes (their share)
+                const memberTotalPaid = personBreakdown[email].totalInvolved; // What this member paid
                 console.log(personBreakdown[email])
-                const memberPercentage = totalGroupExpenses > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
+                const memberPercentage = totalGroupExpenses > 0 ? (memberTotalOwes / totalGroupExpenses) * 100 : 0;
 
                 // Calculate user's net position with this person from expenses
                 let userPaidForThisPerson = 0;  // How much user paid in expenses involving this person
@@ -338,18 +357,16 @@ const getGroupStatus = async ({
                 // Current net = original net - settlements received + settlements paid
                 const currentNetWithPerson = originalNetWithPerson - netSettlementWithPerson;
 
-                // For the current user's own email, show their share (owes), not what they paid
-                const involvedAmountForPerson = email === userEmail ? userOwesForThisPerson : memberTotalInvolved;
-                const involvedPercentageForPerson = email === userEmail 
-                    ? (totalGroupExpenses > 0 ? (userOwesForThisPerson / totalGroupExpenses) * 100 : 0)
-                    : memberPercentage;
+                // For all members, show their share (what they owe) in involved
+                const involvedAmountForPerson = memberTotalOwes;
+                const involvedPercentageForPerson = memberPercentage;
 
                 // For current user's own email, myExpense should be their share
                 const myExpenseOriginal = email === userEmail ? userOwesForThisPerson : originalNetWithPerson;
                 const myExpenseCurrent = email === userEmail ? (userOwesForThisPerson - netSettlementWithPerson) : currentNetWithPerson;
                 const myExpensePercentage = email === userEmail 
                     ? (totalGroupExpenses > 0 ? (userOwesForThisPerson / totalGroupExpenses) * 100 : 0)
-                    : (memberTotalInvolved > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0);
+                    : (memberTotalOwes > 0 ? (memberTotalOwes / totalGroupExpenses) * 100 : 0);
 
                 return {
                     memberEmail: email,
