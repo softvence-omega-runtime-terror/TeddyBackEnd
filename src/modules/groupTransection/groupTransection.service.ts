@@ -95,12 +95,11 @@ const getGroupStatus = async ({
         let userPersonalBalance = 0;
         let userPaidInExpense = 0;
 
-        // Process each expense
+        // Process each expense (settlements are now separate, so all items here are real expenses)
         for (const expense of group.groupExpenses || []) {
 
-            if ((expense as any).isSettledItem !== true) {
-                totalGroupExpenses += expense.totalExpenseAmount;
-            }
+            // All expenses count toward total (no more settlement items mixed in)
+            totalGroupExpenses += expense.totalExpenseAmount;
 
             const categoryName = (expense.category as any)?.name || 'Unknown';
 
@@ -119,42 +118,25 @@ const getGroupStatus = async ({
             categoryBreakdown[categoryName].totalAmount += expense.totalExpenseAmount;
 
             // Calculate user's payment for this expense
-
             if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                userPaidInExpense += expense.paidBy.amount;
+                userPaidInExpense = expense.paidBy.amount;
                 userPersonalBalance += expense.paidBy.amount;
-            } if (expense.paidBy.type === 'multiple') {
+            } else if (expense.paidBy.type === 'multiple') {
                 const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                userPaidInExpense += userPayment?.amount || 0;
+                userPaidInExpense = userPayment?.amount || 0;
                 userPersonalBalance += userPayment?.amount || 0;
+            } else {
+                userPaidInExpense = 0;
             }
-
-            console.log("User paid in expense1:", userPaidInExpense);
-
-            if (
-                // (expense as any).isSettledItem === true &&
-                expense.shareWith?.type === 'custom' &&
-                expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
-            ) {
-                console.log("Settled item adjustment for user:", userEmail);
-                const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
-                if (share) {
-                    console.log("user email", userEmail, "share amount", share.amount);
-                    console.log("Before adjustment, userPaidInExpense:", userPaidInExpense);
-                    userPaidInExpense = userPaidInExpense - share.amount;
-                    console.log("After adjustment, userPaidInExpense:", userPaidInExpense);
-                }
-            }
-
 
             userTotalPaid += userPaidInExpense;
             categoryBreakdown[categoryName].userPaid += userPaidInExpense;
 
             // Calculate user's share for this expense
             let userOwesInExpense = 0;
-            if ((expense as any).isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+            if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
                 userOwesInExpense = expense.totalExpenseAmount / expense.shareWith.members.length;
-            } else if ((expense as any).isSettledItem === false && expense.shareWith.type === 'custom') {
+            } else if (expense.shareWith.type === 'custom') {
                 const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
                 userOwesInExpense = userShare?.amount || 0;
             }
@@ -259,21 +241,11 @@ const getGroupStatus = async ({
                         personInvolvedInExpense = expense.shareWith.shares?.some(s => s.memberEmail === email) || false;
                     }
 
-                    // If this person is involved in the expense, calculate user's payment for this expense
-                    // if (personInvolvedInExpense) {
-                    //     if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                    //         userExpenseForThisPerson += expense.paidBy.amount;
-                    //     } else if (expense.paidBy.type === 'multiple') {
-                    //         const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                    //         userExpenseForThisPerson += userPayment?.amount || 0;
-                    //     }
-                    // }
-
-
+                    // If this person is involved in the expense, calculate user's share
                     if (personInvolvedInExpense) {
-                        if ((expense as any).isSettledItem === false && expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
+                        if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
                             userExpenseForThisPerson = expense.totalExpenseAmount / expense.shareWith.members.length;
-                        } else if ((expense as any).isSettledItem === false && expense.shareWith.type === 'custom') {
+                        } else if (expense.shareWith.type === 'custom') {
                             const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
                             userExpenseForThisPerson = userShare?.amount || 0;
                         }
@@ -281,9 +253,6 @@ const getGroupStatus = async ({
                 }
 
                 userExpensePercentageForThisPerson = memberTotalInvolved > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
-
-
-                console.log('Person:', email, 'User Expense:', userExpenseForThisPerson, 'Total Involved:', totalGroupExpenses, 'Percentage:', userExpensePercentageForThisPerson);
 
                 return {
                     memberEmail: email,
@@ -1091,13 +1060,13 @@ const validateShareWith = async (shareWith: any, totalAmount: number, group: any
     }
 };
 
-// Calculate group balances and debts
+// Calculate group balances and debts (NOW WITH SETTLEMENT SUPPORT)
 const calculateGroupBalances = async (groupId: string) => {
     try {
         const group = await GroupTransactionModel.findOne({ groupId: parseInt(groupId) });
 
-        if (!group || !group.groupExpenses) {
-            throw new Error('Group not found or no expenses');
+        if (!group) {
+            throw new Error('Group not found');
         }
 
         // Create member balance map
@@ -1113,37 +1082,58 @@ const calculateGroupBalances = async (groupId: string) => {
             memberBalances[memberEmail] = { paid: 0, owes: 0, net: 0 };
         });
 
-        // Process each expense
-        for (const expense of group.groupExpenses) {
-            // Calculate who paid what
-            if (expense.paidBy.type === 'individual') {
-                const payerEmail = expense.paidBy.memberEmail;
-                memberBalances[payerEmail].paid += expense.paidBy.amount;
-            } else {
-                expense.paidBy.payments?.forEach(payment => {
-                    const payerEmail = payment.memberEmail;
-                    memberBalances[payerEmail].paid += payment.amount;
-                });
-            }
+        // Process each REAL expense (not settlement items)
+        if (group.groupExpenses && group.groupExpenses.length > 0) {
+            for (const expense of group.groupExpenses) {
+                // Calculate who paid what
+                if (expense.paidBy.type === 'individual') {
+                    const payerEmail = expense.paidBy.memberEmail;
+                    memberBalances[payerEmail].paid += expense.paidBy.amount;
+                } else {
+                    expense.paidBy.payments?.forEach(payment => {
+                        const payerEmail = payment.memberEmail;
+                        memberBalances[payerEmail].paid += payment.amount;
+                    });
+                }
 
-            // Calculate who owes what
-            if (expense.shareWith.type === 'equal') {
-                const shareAmount = expense.totalExpenseAmount / expense.shareWith.members.length;
-                expense.shareWith.members.forEach(memberEmail => {
-                    memberBalances[memberEmail].owes += shareAmount;
-                });
-            } else {
-                expense.shareWith.shares?.forEach(share => {
-                    const memberEmail = share.memberEmail;
-                    memberBalances[memberEmail].owes += share.amount;
-                });
+                // Calculate who owes what
+                if (expense.shareWith.type === 'equal') {
+                    const shareAmount = expense.totalExpenseAmount / expense.shareWith.members.length;
+                    expense.shareWith.members.forEach(memberEmail => {
+                        memberBalances[memberEmail].owes += shareAmount;
+                    });
+                } else {
+                    expense.shareWith.shares?.forEach(share => {
+                        const memberEmail = share.memberEmail;
+                        memberBalances[memberEmail].owes += share.amount;
+                    });
+                }
             }
         }
 
-        // Calculate net balances
+        // Calculate initial net balances (before settlements)
         Object.keys(memberBalances).forEach(memberEmail => {
             memberBalances[memberEmail].net = memberBalances[memberEmail].paid - memberBalances[memberEmail].owes;
-        }); return memberBalances;
+        });
+
+        // NOW APPLY SETTLEMENTS to adjust net balances
+        if (group.settlements && group.settlements.length > 0) {
+            for (const settlement of group.settlements) {
+                // When someone settles a debt:
+                // - fromEmail PAYS money (reduces their negative balance)
+                // - toEmail RECEIVES money (reduces their positive balance)
+                
+                if (memberBalances[settlement.fromEmail]) {
+                    memberBalances[settlement.fromEmail].net += settlement.amount;
+                }
+                
+                if (memberBalances[settlement.toEmail]) {
+                    memberBalances[settlement.toEmail].net -= settlement.amount;
+                }
+            }
+        }
+
+        return memberBalances;
     } catch (error: any) {
         console.error('Error in calculateGroupBalances:', error.message);
         throw new Error(`Failed to calculate group balances: ${error.message}`);
@@ -1476,38 +1466,34 @@ const settleDebt = async ({
         }
 
         if (amount > Math.abs(fromBalance)) {
-            throw new Error(`Settlement amount cannot exceed the debt amount`);
+            throw new Error(`Settlement amount (${amount}) cannot exceed the debt amount (${Math.abs(fromBalance)})`);
         }
 
         if (amount > toBalance) {
-            throw new Error(`Settlement amount cannot exceed what is owed to ${toEmail}`);
+            throw new Error(`Settlement amount (${amount}) cannot exceed what is owed to ${toEmail} (${toBalance})`);
         }
 
-        // Record the settlement as a new expense
-        // This settlement expense will adjust the balances
-        const settlementExpense = {
-            expenseDate: new Date(),
-            totalExpenseAmount: amount,
-            currency: 'USD' as const, // Default currency, could be configurable
-            category: new mongoose.Types.ObjectId(), // You might want to create a special "Settlement" category
-            note: `Settlement: ${fromEmail} paid ${toEmail}`,
-            paidBy: {
-                type: 'individual' as const,
-                memberEmail: fromEmail,
-                amount: amount
-            },
-            shareWith: {
-                type: 'custom' as const,
-                shares: [{
-                    memberEmail: toEmail,
-                    amount: amount
-                }]
-            }
+        // Get default currency from group expenses or use USD
+        const groupCurrencies = group.groupExpenses?.map(exp => exp.currency) || [];
+        const defaultCurrency = groupCurrencies.length > 0 ? groupCurrencies[0] : 'USD';
+
+        // ADD SETTLEMENT TO THE NEW SETTLEMENTS ARRAY (NOT as expense!)
+        const newSettlement = {
+            settlementDate: new Date(),
+            fromEmail: fromEmail,
+            toEmail: toEmail,
+            amount: amount,
+            currency: defaultCurrency,
+            settledBy: user_id!,
+            note: `Settlement: ${fromEmail} paid ${toEmail}`
         };
 
-        group.groupExpenses = group.groupExpenses || [];
-        group.groupExpenses.push(settlementExpense);
+        // Initialize settlements array if it doesn't exist
+        if (!group.settlements) {
+            group.settlements = [];
+        }
 
+        group.settlements.push(newSettlement as any);
         await group.save();
 
         // Save settlement to history for permanent record
@@ -1594,25 +1580,29 @@ const settleMultipleDebts = async ({
 
             // Check if the settlement makes sense
             if (fromBalance >= 0) {
-                validationErrors.push(`Settlement ${index + 1}: ${fromEmail} does not owe money`);
+                validationErrors.push(`Settlement ${index + 1}: ${fromEmail} does not owe money (balance: ${fromBalance})`);
             }
 
             if (toBalance <= 0) {
-                validationErrors.push(`Settlement ${index + 1}: ${toEmail} is not owed money`);
+                validationErrors.push(`Settlement ${index + 1}: ${toEmail} is not owed money (balance: ${toBalance})`);
             }
 
             if (amount > Math.abs(fromBalance)) {
-                validationErrors.push(`Settlement ${index + 1}: amount cannot exceed the debt amount`);
+                validationErrors.push(`Settlement ${index + 1}: amount (${amount}) cannot exceed the debt amount (${Math.abs(fromBalance)})`);
             }
 
             if (amount > toBalance) {
-                validationErrors.push(`Settlement ${index + 1}: amount cannot exceed what is owed to ${toEmail}`);
+                validationErrors.push(`Settlement ${index + 1}: amount (${amount}) cannot exceed what is owed to ${toEmail} (${toBalance})`);
             }
         });
 
         if (validationErrors.length > 0) {
             throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
         }
+
+        // Get default currency from group expenses or use USD
+        const groupCurrencies = group.groupExpenses?.map(exp => exp.currency) || [];
+        const defaultCurrency = groupCurrencies.length > 0 ? groupCurrencies[0] : 'USD';
 
         // Process all settlements
         const settlementResults: Array<{
@@ -1626,34 +1616,27 @@ const settleMultipleDebts = async ({
         const batchId = generateBatchId();
         const settlementHistoryRecords = [];
 
+        // Initialize settlements array if it doesn't exist
+        if (!group.settlements) {
+            group.settlements = [];
+        }
+
         for (const settlement of settlements) {
             const { fromEmail, toEmail, amount } = settlement;
 
-            // Record each settlement as a new expense
-            const settlementExpense = {
-                expenseDate: new Date(),
-                totalExpenseAmount: amount,
-                currency: 'USD' as const, // Default currency, could be configurable
-                category: new mongoose.Types.ObjectId(), // You might want to create a special "Settlement" category
-                note: `Settlement: ${fromEmail} paid ${toEmail}`,
-                paidBy: {
-                    type: 'individual' as const,
-                    memberEmail: fromEmail,
-                    amount: amount
-                },
-                shareWith: {
-                    type: 'custom' as const,
-                    shares: [{
-                        memberEmail: toEmail,
-                        amount: amount
-                    }]
-                },
-                isSettledItem: true
+            // ADD TO SETTLEMENTS ARRAY (NOT as expense!)
+            const newSettlement = {
+                settlementDate: new Date(),
+                fromEmail: fromEmail,
+                toEmail: toEmail,
+                amount: amount,
+                currency: defaultCurrency,
+                settledBy: user_id!,
+                batchId: batchId,
+                note: `Batch settlement: ${fromEmail} paid ${toEmail}`
             };
 
-            group.groupExpenses = group.groupExpenses || [];
-            group.groupExpenses.push(settlementExpense);
-
+            group.settlements.push(newSettlement as any);
 
             // Prepare settlement history record
             settlementHistoryRecords.push({
@@ -1689,6 +1672,7 @@ const settleMultipleDebts = async ({
             message: `Successfully processed ${settlements.length} settlement(s)`,
             settlements: settlementResults,
             totalSettlements: settlements.length,
+            batchId: batchId,
             updatedData: updatedSettlements
         };
 
@@ -1850,7 +1834,81 @@ const getGroupTransactions = async ({
                 userOwes = userShare?.amount || 0;
             }
 
-            const userNet = userPaid - userOwes;
+            // Calculate original net from this expense alone
+            const originalNet = userPaid - userOwes;
+            
+            // Calculate how much has been settled for this expense
+            let settledAmount = 0;
+            
+            if (group.settlements && group.settlements.length > 0) {
+                // If user lent money (originalNet > 0), check who has paid them back
+                if (originalNet > 0) {
+                    // Find who owes money in this expense
+                    const debtors: { [email: string]: number } = {};
+                    
+                    if (expense.shareWith.type === 'equal') {
+                        const shareAmount = expense.totalExpenseAmount / expense.shareWith.members.length;
+                        expense.shareWith.members.forEach(memberEmail => {
+                            if (memberEmail !== userEmail) {
+                                debtors[memberEmail] = shareAmount;
+                            }
+                        });
+                    } else if (expense.shareWith.type === 'custom') {
+                        expense.shareWith.shares?.forEach(share => {
+                            if (share.memberEmail !== userEmail) {
+                                debtors[share.memberEmail] = share.amount;
+                            }
+                        });
+                    }
+                    
+                    // Check settlements: who paid the current user
+                    for (const settlement of group.settlements) {
+                        if (settlement.toEmail === userEmail && debtors[settlement.fromEmail]) {
+                            // This debtor has made a payment to the user
+                            // Attribute the settlement proportionally to this expense
+                            const debtorOwed = debtors[settlement.fromEmail];
+                            const debtorTotalOwed = balances[settlement.fromEmail]?.owes || 1;
+                            
+                            // Proportional attribution: (what they owe in this expense / total they owe) * settlement amount
+                            const expenseProportionOfSettlement = (debtorOwed / debtorTotalOwed) * settlement.amount;
+                            settledAmount += expenseProportionOfSettlement;
+                        }
+                    }
+                }
+                
+                // If user borrowed money (originalNet < 0), check what they've paid back
+                if (originalNet < 0) {
+                    // Find who the user owes in this expense
+                    let creditor: string | null = null;
+                    let amountOwedToCreditor = 0;
+                    
+                    if (expense.paidBy.type === 'individual') {
+                        creditor = expense.paidBy.memberEmail;
+                        if (creditor !== userEmail) {
+                            amountOwedToCreditor = Math.abs(originalNet);
+                        }
+                    }
+                    
+                    // Check settlements: what user paid to this creditor
+                    if (creditor) {
+                        for (const settlement of group.settlements) {
+                            if (settlement.fromEmail === userEmail && settlement.toEmail === creditor) {
+                                // User has paid this creditor
+                                const userTotalOwed = Math.abs(balances[userEmail]?.owes || 1);
+                                
+                                // Proportional attribution
+                                const expenseProportionOfSettlement = (amountOwedToCreditor / userTotalOwed) * settlement.amount;
+                                settledAmount += expenseProportionOfSettlement;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Calculate current net after settlements
+            const currentNet = originalNet > 0 
+                ? originalNet - settledAmount  // If user lent, subtract what's been paid back
+                : originalNet + settledAmount; // If user borrowed, add what they've paid back
 
             return {
                 _id: (expense as any)._id,
@@ -1864,9 +1922,11 @@ const getGroupTransactions = async ({
                 userInvolvement: {
                     paid: userPaid,
                     owes: userOwes,
-                    net: userNet,
-                    status: userNet > 0 ? 'you_lent' : userNet < 0 ? 'you_borrowed' : 'settled',
-                    amount: Math.abs(userNet)
+                    originalNet: originalNet, // Original amount before settlements
+                    settledAmount: settledAmount, // Amount that has been settled
+                    net: currentNet, // Current amount after settlements
+                    status: currentNet > 0.01 ? 'you_lent' : currentNet < -0.01 ? 'you_borrowed' : 'settled',
+                    amount: Math.abs(currentNet)
                 }
             };
         });
@@ -1903,19 +1963,6 @@ const getGroupTransactions = async ({
                 expensesByDate[dateKey] = [];
             }
 
-            console.log("Processing expense:", expense);
-
-            // if (
-            //     // (expense as any).isSettledItem === true &&
-            //     expense.shareWith?.type === 'custom' &&
-            //     expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
-            // ) {
-            //     console.log("Settled item adjustment for user:", userEmail);
-            //     const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
-            //     if (share) {
-            //         expense.userInvolvement.amount = expense.userInvolvement.amount - share.amount;
-            //     }
-            // }
 
             expensesByCategory[categoryName].push(expense);
             expensesByDate[dateKey].push(expense);
@@ -1929,6 +1976,14 @@ const getGroupTransactions = async ({
         const totalUserLent = filteredExpenses
             .filter(exp => exp.userInvolvement.status === 'you_lent')
             .reduce((sum, exp) => sum + exp.userInvolvement.amount, 0);
+
+        // Get settlement information for this group
+        const userSettlements = {
+            received: group.settlements?.filter(s => s.toEmail === userEmail) || [],
+            paid: group.settlements?.filter(s => s.fromEmail === userEmail) || [],
+            totalReceived: group.settlements?.filter(s => s.toEmail === userEmail).reduce((sum, s) => sum + s.amount, 0) || 0,
+            totalPaid: group.settlements?.filter(s => s.fromEmail === userEmail).reduce((sum, s) => sum + s.amount, 0) || 0
+        };
 
         return {
             group: {
@@ -1949,7 +2004,11 @@ const getGroupTransactions = async ({
                 },
                 totalExpenses,
                 totalUserBorrowed,
-                totalUserLent
+                totalUserLent,
+                // Add settlement summary
+                totalSettlementsReceived: userSettlements.totalReceived,
+                totalSettlementsPaid: userSettlements.totalPaid,
+                netAfterSettlements: youllCollect - youllPay // This is the current balance
             },
             expenses: {
                 list: filteredExpenses,
@@ -1957,6 +2016,7 @@ const getGroupTransactions = async ({
                 byDate: expensesByDate,
                 count: filteredExpenses.length
             },
+            settlements: userSettlements, // Add settlement details
             filters: filters || {},
             balances: balances
         };

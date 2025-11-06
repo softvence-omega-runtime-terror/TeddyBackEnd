@@ -47,8 +47,21 @@ const groupTransactionSchema = new Schema<TGroupTransaction>({
                     }],
                     required: function (this: any) { return this.shareWith.type === 'custom'; }
                 }
-            },
-            isSettledItem: { type: Boolean, default: false },
+            }
+        }],
+        default: []
+    },
+    // NEW: Separate settlements array to track debt payments
+    settlements: {
+        type: [{
+            settlementDate: { type: Date, required: true, default: Date.now },
+            fromEmail: { type: String, required: true },
+            toEmail: { type: String, required: true },
+            amount: { type: Number, required: true },
+            currency: { type: String, enum: ['USD', 'EUR', 'SGD', 'GBP', 'AUD'], required: true },
+            settledBy: { type: Schema.Types.ObjectId, ref: 'UserCollection', required: true },
+            batchId: { type: String, required: false }, // For grouping multiple settlements
+            note: { type: String, required: false }
         }],
         default: []
     }

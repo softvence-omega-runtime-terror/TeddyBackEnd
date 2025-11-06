@@ -29,6 +29,18 @@ export type TShareWith =
         }[];
     };
 
+// Define settlement type
+export type TSettlement = {
+    settlementDate: Date;
+    fromEmail: string;
+    toEmail: string;
+    amount: number;
+    currency: 'USD' | 'EUR' | 'SGD' | 'GBP' | 'AUD';
+    settledBy: Types.ObjectId;
+    batchId?: string;
+    note?: string;
+};
+
 // Define group structure
 export type TGroupTransaction = {
     groupId?: number;
@@ -44,5 +56,6 @@ export type TGroupTransaction = {
         note?: string;
         paidBy: TPaidBy;
         shareWith: TShareWith;
-    }[]
+    }[];
+    settlements?: TSettlement[];
 }
