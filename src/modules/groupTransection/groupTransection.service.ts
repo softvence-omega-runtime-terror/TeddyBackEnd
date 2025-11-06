@@ -12,16 +12,10 @@ const generateBatchId = () => {
 // Get comprehensive group status with summary and breakdowns
 const getGroupStatus = async ({
     groupId,
-    user_id,
-    filters = {}
+    user_id
 }: {
     groupId: string,
-    user_id: mongoose.Types.ObjectId | null,
-    filters?: {
-        expenseView?: 'all' | 'involving_me_only',
-        transactionType?: 'i_borrowed' | 'i_lent' | 'all',
-        search?: string
-    }
+    user_id: mongoose.Types.ObjectId | null
 }) => {
     try {
         // Get user email
@@ -103,73 +97,8 @@ const getGroupStatus = async ({
         let userPersonalBalance = 0;
         let userPaidInExpense = 0;
 
-        // Apply filters to expenses
-        let filteredExpenses = group.groupExpenses || [];
-
-        // Apply search filter
-        if (filters.search) {
-            const searchTerm = filters.search.toLowerCase();
-            filteredExpenses = filteredExpenses.filter(expense => {
-                const categoryName = (expense.category as any)?.name?.toLowerCase() || '';
-                const note = expense.note?.toLowerCase() || '';
-                return categoryName.includes(searchTerm) || note.includes(searchTerm);
-            });
-        }
-
-        // First pass: determine user involvement in each expense for filtering
-        const expensesWithInvolvement = filteredExpenses.map(expense => {
-            let userPaid = 0;
-            let userOwes = 0;
-
-            // Check if user paid
-            if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                userPaid = expense.paidBy.amount;
-            } else if (expense.paidBy.type === 'multiple') {
-                const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                userPaid = userPayment?.amount || 0;
-            }
-
-            // Check how much user owes
-            if (expense.shareWith.type === 'equal' && expense.shareWith.members.includes(userEmail)) {
-                userOwes = expense.totalExpenseAmount / expense.shareWith.members.length;
-            } else if (expense.shareWith.type === 'custom') {
-                const userShare = expense.shareWith.shares?.find(s => s.memberEmail === userEmail);
-                userOwes = userShare?.amount || 0;
-            }
-
-            const net = userPaid - userOwes;
-            const status = net > 0.01 ? 'you_lent' : net < -0.01 ? 'you_borrowed' : 'settled';
-
-            return {
-                expense,
-                userPaid,
-                userOwes,
-                status
-            };
-        });
-
-        // Apply expenseView filter
-        let finalExpenses = expensesWithInvolvement;
-        if (filters.expenseView === 'involving_me_only') {
-            finalExpenses = expensesWithInvolvement.filter(item =>
-                item.userPaid > 0 || item.userOwes > 0
-            );
-        }
-
-        // Apply transactionType filter
-        if (filters.transactionType && filters.transactionType !== 'all') {
-            if (filters.transactionType === 'i_borrowed') {
-                finalExpenses = finalExpenses.filter(item => item.status === 'you_borrowed');
-            } else if (filters.transactionType === 'i_lent') {
-                finalExpenses = finalExpenses.filter(item => item.status === 'you_lent');
-            }
-        }
-
-        // Extract the filtered expenses
-        filteredExpenses = finalExpenses.map(item => item.expense);
-
         // Process each expense (settlements are now separate, so all items here are real expenses)
-        for (const expense of filteredExpenses) {
+        for (const expense of group.groupExpenses || []) {
 
             // All expenses count toward total (no more settlement items mixed in)
             totalGroupExpenses += expense.totalExpenseAmount;
