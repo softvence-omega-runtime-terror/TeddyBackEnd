@@ -180,6 +180,24 @@ const getGroupStatus = async ({
         // Get user's net balance
         const userBalance = balances[userEmail] || { paid: 0, owes: 0, net: 0 };
 
+        // Calculate settlement adjustments
+        let totalSettlementsReceived = 0;
+        let totalSettlementsPaid = 0;
+        
+        if (group.settlements && group.settlements.length > 0) {
+            for (const settlement of group.settlements) {
+                if (settlement.toEmail === userEmail) {
+                    totalSettlementsReceived += settlement.amount;
+                } else if (settlement.fromEmail === userEmail) {
+                    totalSettlementsPaid += settlement.amount;
+                }
+            }
+        }
+        
+        // Current effective expense = what you paid - settlements received + settlements paid
+        // This represents your actual current financial contribution
+        const currentEffectiveExpense = userTotalPaid - totalSettlementsReceived + totalSettlementsPaid;
+
         return {
             group: {
                 groupId: group.groupId,
@@ -193,27 +211,62 @@ const getGroupStatus = async ({
                 involvedAmount: parseInt(userTotalOwes.toString()),
                 myExpensesPercentage: parseFloat(userInvolvementPercentage.toFixed(2)),
                 myExpensesCurrency: involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'Mixed',
-                myExpensesAmount: parseInt(userTotalPaid.toString()),
+                myExpensesAmount: parseInt(currentEffectiveExpense.toString()),
+                originalPaidAmount: parseInt(userTotalPaid.toString()),
+                settlementsReceived: parseInt(totalSettlementsReceived.toString()),
+                settlementsPaid: parseInt(totalSettlementsPaid.toString()),
                 netBalance: {
                     amount: Math.floor(Math.abs(userBalance.net)),
                     status: Math.floor(userBalance.net) > 0 ? 'you_are_owed' : Math.floor(userBalance.net) < 0 ? 'you_owe' : 'settled',
                     currency: involvedCurrencies.length === 1 ? involvedCurrencies[0] : 'Mixed'
                 }
             },
-            categoryWise: Object.keys(categoryBreakdown).map(categoryName => ({
-                categoryName,
-                involved: {
-                    currency: categoryBreakdown[categoryName].currency,
-                    amount: categoryBreakdown[categoryName].totalAmount,
-                    percentage: parseFloat(categoryBreakdown[categoryName].percentage.toFixed(2))
-                },
-                myExpense: {
-                    currency: categoryBreakdown[categoryName].currency,
-                    amount: categoryBreakdown[categoryName].userPaid,
-                    percentage: categoryBreakdown[categoryName].totalAmount > 0 ?
-                        parseFloat(((categoryBreakdown[categoryName].userPaid / categoryBreakdown[categoryName].totalAmount) * 100).toFixed(2)) : 0
+            categoryWise: Object.keys(categoryBreakdown).map(categoryName => {
+                // Calculate settlement impact for this category
+                let categorySettlementImpact = 0;
+                
+                // Get user's original net balance from expenses only
+                const userOriginalNet = userTotalPaid - userTotalOwes;
+                
+                // Calculate total settlements received/paid by user
+                let totalSettlementsReceived = 0;
+                let totalSettlementsPaid = 0;
+                
+                if (group.settlements && group.settlements.length > 0) {
+                    for (const settlement of group.settlements) {
+                        if (settlement.toEmail === userEmail) {
+                            totalSettlementsReceived += settlement.amount;
+                        } else if (settlement.fromEmail === userEmail) {
+                            totalSettlementsPaid += settlement.amount;
+                        }
+                    }
                 }
-            })).sort((a, b) => b.involved.amount - a.involved.amount),
+                
+                // Calculate net settlement impact
+                const netSettlementImpact = totalSettlementsReceived - totalSettlementsPaid;
+                
+                // Proportionally attribute settlement to this category based on user's paid amount in this category
+                if (userTotalPaid > 0) {
+                    categorySettlementImpact = (categoryBreakdown[categoryName].userPaid / userTotalPaid) * netSettlementImpact;
+                }
+                
+                return {
+                    categoryName,
+                    involved: {
+                        currency: categoryBreakdown[categoryName].currency,
+                        amount: categoryBreakdown[categoryName].totalAmount,
+                        percentage: parseFloat(categoryBreakdown[categoryName].percentage.toFixed(2))
+                    },
+                    myExpense: {
+                        currency: categoryBreakdown[categoryName].currency,
+                        originalAmount: categoryBreakdown[categoryName].userPaid,
+                        settledAmount: parseFloat(categorySettlementImpact.toFixed(2)),
+                        currentAmount: parseFloat((categoryBreakdown[categoryName].userPaid + categorySettlementImpact).toFixed(2)),
+                        percentage: categoryBreakdown[categoryName].totalAmount > 0 ?
+                            parseFloat(((categoryBreakdown[categoryName].userPaid / categoryBreakdown[categoryName].totalAmount) * 100).toFixed(2)) : 0
+                    }
+                };
+            }).sort((a, b) => b.involved.amount - a.involved.amount),
             personWise: Object.keys(personBreakdown).map(email => {
                 const memberTotalInvolved = personBreakdown[email].totalInvolved;
                 console.log(personBreakdown[email])
@@ -254,6 +307,25 @@ const getGroupStatus = async ({
 
                 userExpensePercentageForThisPerson = memberTotalInvolved > 0 ? (memberTotalInvolved / totalGroupExpenses) * 100 : 0;
 
+                // Calculate settlements between user and this person
+                let settlementsFromThisPerson = 0; // Money user received from this person
+                let settlementsToThisPerson = 0;   // Money user paid to this person
+                
+                if (group.settlements && group.settlements.length > 0) {
+                    for (const settlement of group.settlements) {
+                        // User received money from this person
+                        if (settlement.toEmail === userEmail && settlement.fromEmail === email) {
+                            settlementsFromThisPerson += settlement.amount;
+                        }
+                        // User paid money to this person
+                        else if (settlement.fromEmail === userEmail && settlement.toEmail === email) {
+                            settlementsToThisPerson += settlement.amount;
+                        }
+                    }
+                }
+                
+                const netSettlementWithPerson = settlementsFromThisPerson - settlementsToThisPerson;
+
                 return {
                     memberEmail: email,
                     involved: {
@@ -263,7 +335,9 @@ const getGroupStatus = async ({
                     },
                     myExpense: {
                         currency: personBreakdown[email].currency,
-                        amount: userExpenseForThisPerson,
+                        originalAmount: userExpenseForThisPerson,
+                        settledAmount: parseFloat(netSettlementWithPerson.toFixed(2)),
+                        currentAmount: parseFloat((userExpenseForThisPerson + netSettlementWithPerson).toFixed(2)),
                         percentage: parseFloat(userExpensePercentageForThisPerson.toFixed(2))
                     }
                 };
