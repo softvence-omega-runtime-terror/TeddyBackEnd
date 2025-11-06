@@ -283,13 +283,14 @@ const updateUserProfile = async (
   // If imgFile is provided, upload it to Cloudinary
   if (imgFile) {
     try {
+      const fileSource: string | Buffer = imgFile.buffer || imgFile.path;
       const imageUploadResult = await uploadImgToCloudinary(
         `profile-${user_id.toString()}`, // Custom name for the image
-        imgFile.path, // Path to the uploaded image
+        fileSource, // Path or buffer for the uploaded image
       );
 
       // Add the image URL to the updated profile data
-      updatedProfileData.img = imageUploadResult.secure_url;
+      updatedProfileData.img = (imageUploadResult as any).secure_url;
     } catch (error: any) {
       throw new Error('Error uploading image: ' + error.message);
     }
@@ -400,19 +401,29 @@ const uploadOrChangeImg = async (
     throw new Error('User ID and image file are required.');
   }
 
+  // Determine if we're using memory storage (buffer) or disk storage (path)
+  const fileSource: string | Buffer = imgFile.buffer || imgFile.path;
+  const fileName = imgFile.buffer 
+    ? `${imgFile.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}`
+    : imgFile.filename;
+
+  if (!fileSource) {
+    throw new Error('File source not found. Check multer configuration.');
+  }
+
   // Upload new image to Cloudinary
-  const result = await uploadImgToCloudinary(imgFile.filename, imgFile.path);
+  const result = await uploadImgToCloudinary(fileName, fileSource);
 
   console.log(result);
 
-  if (!result.secure_url) {
+  if (!(result as any).secure_url) {
     throw new Error('Image upload failed.');
   }
 
   // Update user profile with new image URL
   const updatedUserProfile = await ProfileModel.findOneAndUpdate(
     { user_id }, // Corrected query (find by user_id, not _id)
-    { img: result.secure_url },
+    { img: (result as any).secure_url },
     { new: true },
   );
 

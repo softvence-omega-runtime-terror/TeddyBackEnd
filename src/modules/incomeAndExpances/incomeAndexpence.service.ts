@@ -95,8 +95,9 @@ const createIncomeType = async (
     let imageUrl: string | null = null;
     if (file) {
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      imageUrl = uploadResult.secure_url;
+      const fileSource: string | Buffer = file.buffer || file.path;
+      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      imageUrl = (uploadResult as any).secure_url;
     }
 
     // Prepare new income type object
@@ -188,8 +189,9 @@ const createExpensesType = async (
     let imageUrl: string | null = null;
     if (file) {
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      imageUrl = uploadResult.secure_url;
+      const fileSource: string | Buffer = file.buffer || file.path;
+      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      imageUrl = (uploadResult as any).secure_url;
     }
 
     // Prepare new expense type object
@@ -280,8 +282,9 @@ const updateIncomeType = async (user_id: Types.ObjectId, typeId: string, payload
     if (payload.name) doc.incomeTypeList[idx].name = payload.name;
     if (file) {
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      doc.incomeTypeList[idx].img = uploadResult.secure_url;
+      const fileSource: string | Buffer = file.buffer || file.path;
+      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      doc.incomeTypeList[idx].img = (uploadResult as any).secure_url;
     }
     await doc.save();
     return doc;
@@ -319,8 +322,9 @@ const updateExpensesType = async (user_id: Types.ObjectId, typeId: string, paylo
     if (payload.name) doc.expenseTypeList[idx].name = payload.name;
     if (file) {
       const imageName = `${Math.floor(100 + Math.random() * 900)}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      doc.expenseTypeList[idx].img = uploadResult.secure_url;
+      const fileSource: string | Buffer = file.buffer || file.path;
+      const uploadResult = await uploadImgToCloudinary(imageName, fileSource);
+      doc.expenseTypeList[idx].img = (uploadResult as any).secure_url;
     }
     await doc.save();
     return doc;
