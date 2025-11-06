@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { GroupTransactionModel } from "./groupTransection.model";
-import { UserModel } from "../user/user.model";
+import { ProfileModel, UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
 import { GroupSettlementHistoryModel } from "./groupSettlementHistory.model";
 
@@ -92,6 +92,9 @@ const getGroupStatus = async ({
             }
         }
 
+        let userPersonalBalance = 0;
+        let userPaidInExpense = 0;
+
         // Process each expense
         for (const expense of group.groupExpenses || []) {
 
@@ -116,23 +119,30 @@ const getGroupStatus = async ({
             categoryBreakdown[categoryName].totalAmount += expense.totalExpenseAmount;
 
             // Calculate user's payment for this expense
-            let userPaidInExpense = 0;
+
             if (expense.paidBy.type === 'individual' && expense.paidBy.memberEmail === userEmail) {
-                userPaidInExpense = expense.paidBy.amount;
-            } else if (expense.paidBy.type === 'multiple') {
+                userPaidInExpense += expense.paidBy.amount;
+                userPersonalBalance += expense.paidBy.amount;
+            } if (expense.paidBy.type === 'multiple') {
                 const userPayment = expense.paidBy.payments?.find(p => p.memberEmail === userEmail);
-                userPaidInExpense = userPayment?.amount || 0;
+                userPaidInExpense += userPayment?.amount || 0;
+                userPersonalBalance += userPayment?.amount || 0;
             }
 
+            console.log("User paid in expense1:", userPaidInExpense);
 
             if (
-                (expense as any).isSettledItem === true &&
+                // (expense as any).isSettledItem === true &&
                 expense.shareWith?.type === 'custom' &&
                 expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
             ) {
+                console.log("Settled item adjustment for user:", userEmail);
                 const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
                 if (share) {
+                    console.log("user email", userEmail, "share amount", share.amount);
+                    console.log("Before adjustment, userPaidInExpense:", userPaidInExpense);
                     userPaidInExpense = userPaidInExpense - share.amount;
+                    console.log("After adjustment, userPaidInExpense:", userPaidInExpense);
                 }
             }
 
@@ -1893,6 +1903,20 @@ const getGroupTransactions = async ({
                 expensesByDate[dateKey] = [];
             }
 
+            console.log("Processing expense:", expense);
+
+            // if (
+            //     // (expense as any).isSettledItem === true &&
+            //     expense.shareWith?.type === 'custom' &&
+            //     expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail)
+            // ) {
+            //     console.log("Settled item adjustment for user:", userEmail);
+            //     const share = expense.shareWith?.type === 'custom' ? expense.shareWith.shares?.find((s: any) => s.memberEmail === userEmail) : undefined;
+            //     if (share) {
+            //         expense.userInvolvement.amount = expense.userInvolvement.amount - share.amount;
+            //     }
+            // }
+
             expensesByCategory[categoryName].push(expense);
             expensesByDate[dateKey].push(expense);
         });
@@ -2197,21 +2221,43 @@ const getGroupMembers = async ({
         // Prepare member list
         const members = [];
 
+        console.log("Group data for members:", group);
+
         // Add owner as first member
         if (group.ownerEmail) {
-            members.push({
-                email: group.ownerEmail,
-                isOwner: true
-            });
+            const owner = await ProfileModel.findOne({ email: group.ownerEmail }).lean();
+            if (owner) {
+                members.push({
+                    email: owner.email,
+                    name: owner.name,
+                    isOwner: true
+                });
+            } else {
+                members.push({
+                    email: group.ownerEmail,
+                    name: group.ownerEmail.concat(' (Name not found)'),
+                    isOwner: true
+                });
+            }
         }
 
         // Add other members
         if (group.groupMembers && group.groupMembers.length > 0) {
             for (const memberEmail of group.groupMembers) {
-                members.push({
-                    email: memberEmail,
-                    isOwner: false
-                });
+                const member = await ProfileModel.findOne({ email: memberEmail }).lean();
+                if (member) {
+                    members.push({
+                        email: member.email,
+                        name: member.name,
+                        isOwner: false
+                    });
+                } else {
+                    members.push({
+                        email: memberEmail,
+                        name: memberEmail.split('@')[0],
+                        isOwner: false
+                    });
+                }
             }
         }
 
@@ -2220,6 +2266,7 @@ const getGroupMembers = async ({
             groupName: group.groupName,
             owner: {
                 email: group.ownerEmail,
+                name: members.find(m => m.email === group.ownerEmail)?.name || group.ownerEmail,
                 isOwner: true
             },
             members: members,
