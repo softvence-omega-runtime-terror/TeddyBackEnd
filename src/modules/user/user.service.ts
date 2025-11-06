@@ -646,15 +646,50 @@ const addMultipleFriends = async (userId: Types.ObjectId, friendsData: Partial<T
 };
 
 const getFriends = async (userId: Types.ObjectId) => {
-  const profile = await ProfileModel.findOne({ user_id: userId })
-    .populate('friends.user_id', 'name email img')
-    .lean();
+  try {
+    const profile = await ProfileModel.findOne({ user_id: userId });
+    const friends = profile?.friends || [];
 
-  if (!profile) {
-    throw new Error('Profile not found');
+    console.log('Original profile friends:', friends);
+
+    // Separate app users and non-app users
+    const appUserFriends = friends.filter(friend => friend.isAppUser);
+    const nonAppUserFriends = friends.filter(friend => !friend.isAppUser);
+
+    // Get profiles for app users
+    const appUserEmails = appUserFriends.map(friend => friend.email);
+    const appUserProfiles = await ProfileModel.find({
+      email: { $in: appUserEmails }
+    });
+
+    console.log('Found app user profiles:', appUserProfiles.map(p => p.email));
+
+    // Create friend objects for non-app users (they won't have full profiles)
+    const nonAppUserFriendsData = nonAppUserFriends.map(friend => ({
+      _id: (friend as any)._id,
+      name: friend.name,
+      email: friend.email,
+      isAppUser: false,
+      status: friend.status,
+      // Add any other minimal fields you need
+    }));
+
+    // Combine both types of friends
+    const allFriends = [
+      ...appUserProfiles.map(profile => ({
+        ...profile.toObject(),
+        isAppUser: true
+      })),
+      ...nonAppUserFriendsData
+    ];
+
+    console.log('Final friends result:', allFriends.length);
+    return allFriends;
+
+  } catch (error) {
+    console.error('Error fetching friends:', error);
+    throw error;
   }
-
-  return profile.friends || [];
 };
 
 const deleteFriend = async (userId: Types.ObjectId, friendEmail: string) => {
