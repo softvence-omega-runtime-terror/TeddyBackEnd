@@ -1473,12 +1473,13 @@ const getGroupSettlements = async ({
         console.log('Final settlements to show:', settlementsToShow);
 
         // Prepare total balance data
-        const totalBalances = Object.entries(balances).map(([email, balance]) => ({
+        const totalBalances = await Promise.all(Object.entries(balances).map(async ([email, balance]) => ({
             memberEmail: email,
+            memberName: await ProfileModel.findOne({ email }).select('name').lean().then(user => user?.name || email),
             netBalance: Math.round(balance.net * 100) / 100,
             totalPaid: Math.round(balance.paid * 100) / 100,
             totalOwes: Math.round(balance.owes * 100) / 100
-        }));
+        })));
 
         // Calculate total expenses
         const totalExpenses = group.groupExpenses?.reduce((sum, expense) => sum + expense.totalExpenseAmount, 0) || 0;
