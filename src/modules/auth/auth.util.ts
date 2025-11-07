@@ -91,7 +91,9 @@ const sendOTPViaEmail = async (payload: Partial<TUser>) => {
   if (!sendEmailWithOtp.success) {
     console.error('Email sending failed:', sendEmailWithOtp);
     console.log('Email sending failed:', sendEmailWithOtp.error);
-    throw new Error('email sending failed');
+    const emailError = new Error('email sending failed');
+    (emailError as any).cause = sendEmailWithOtp.error;
+    throw emailError;
   }
 
   const token = `${tokenizeData}`;
