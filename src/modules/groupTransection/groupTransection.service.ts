@@ -1414,8 +1414,6 @@ const getGroupSettlements = async ({
             throw new Error('Group not found');
         }
 
-        console.log('Group found:', group);
-
         // Verify user is member or owner
         const isOwner = group.ownerEmail === userEmail;
         const isMember = group.groupMembers?.includes(userEmail);
@@ -1433,13 +1431,9 @@ const getGroupSettlements = async ({
             groupId: parseInt(groupId)
         }).sort({ settledAt: -1 }).lean();
 
-        console.log('Current settlements count:', currentSettlements.length);
-        console.log('Settlement history count:', settlementHistory.length);
-        console.log('Current settlements data:', currentSettlements);
-        console.log('Settlement history data:', settlementHistory);
-
         // Combine current settlements with historical data for display
         let settlementsToShow: any[] = [];
+        console.log('Current Settlements:', currentSettlements);
 
         // Strategy: Always show BOTH current and recent historical settlements
         // This gives the frontend complete context
@@ -1447,23 +1441,27 @@ const getGroupSettlements = async ({
         // Add current settlements (if any) - these are active/pending settlements
         if (currentSettlements.length > 0) {
             console.log('Adding current settlements to display');
-            const currentSettlementsFormatted = currentSettlements.map(settlement => ({
+            const currentSettlementsFormatted = await Promise.all(currentSettlements.map(async settlement => ({
                 ...settlement,
+                formName: await ProfileModel.findOne({ email: settlement.from }).select('name').lean().then(user => user?.name || 'Unknown'),
+                toName: await ProfileModel.findOne({ email: settlement.to }).select('name').lean().then(user => user?.name || 'Unknown'),
                 isHistorical: false
-            }));
+            })));
             settlementsToShow.push(...currentSettlementsFormatted);
         }
 
         // Always add recent historical settlements for context (last 5)
         if (settlementHistory.length > 0) {
             console.log('Adding historical settlements to display');
-            const recentHistoricalSettlements = settlementHistory.slice(0, 5).map(history => ({
+            const recentHistoricalSettlements = await Promise.all(settlementHistory.slice(0, 5).map(async history => ({
                 from: history.fromEmail,
                 to: history.toEmail,
                 amount: history.amount,
                 isHistorical: true,
+                formName: await ProfileModel.findOne({ email: history.fromEmail }).select('name').lean().then(user => user?.name || history.fromEmail),
+                toName: await ProfileModel.findOne({ email: history.toEmail }).select('name').lean().then(user => user?.name || history.toEmail),
                 settledAt: history.settledAt
-            }));
+            })));
             settlementsToShow.push(...recentHistoricalSettlements);
         }
 
