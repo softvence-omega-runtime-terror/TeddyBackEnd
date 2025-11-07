@@ -89,6 +89,8 @@ const sendOTPViaEmail = async (payload: Partial<TUser>) => {
   );
   console.log('Email sent with OTP:', { sendEmailWithOtp });
   if (!sendEmailWithOtp.success) {
+    console.error('Email sending failed:', sendEmailWithOtp);
+    console.log('Email sending failed:', sendEmailWithOtp.error);
     throw new Error('email sending failed');
   }
 

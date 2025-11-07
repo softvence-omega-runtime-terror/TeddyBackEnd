@@ -153,8 +153,6 @@ const createUser = async (payload: Partial<TUser>) => {
     }
     console.error('Transaction failed:', error);
 
-
-
     throw new Error(
       error.message ||
       'User creation, profile update, or group/transaction update failed due to an internal error.',
