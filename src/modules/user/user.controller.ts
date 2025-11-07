@@ -256,14 +256,21 @@ const updateFriend = catchAsync(async (req, res) => {
 });
 
 const createUser = catchAsync(async (req, res): Promise<void> => {
-  console.log("Request Body:", req.body); // Debugging line to check the request body
-  const result = await userServices.createUser(req.body);
+  try {
+    const result = await userServices.createUser(req.body);
 
-  res.status(200).json({
-    status: 'success',
-    message: 'User created successfully',
-    data: result,
-  });
+    res.status(200).json({
+      status: 'success',
+      message: 'User created successfully',
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create user',
+      error: (error as Error).message,
+    });
+  }
 });
 
 const setFCMToken = catchAsync(async (req, res) => {
@@ -512,15 +519,15 @@ const debugCategories = catchAsync(async (req, res) => {
   if (!converted_user_id) {
     throw Error('id conversation failed');
   }
-  
+
   console.log('=== DEBUG: Category Debug Info ===');
   console.log('User ID from token:', user_id);
   console.log('Converted User ID:', converted_user_id);
-  
+
   // Check categories count
   const hasCategories = await userServices.checkUserHasCategories(converted_user_id);
   const allCategories = await userServices.getAllCategories(converted_user_id);
-  
+
   globalResponseHandler(res, {
     statusCode: 200,
     success: true,
@@ -540,7 +547,7 @@ const initializeDefaultCategories = catchAsync(async (req, res) => {
   if (!converted_user_id) {
     throw Error('id conversation failed');
   }
-  
+
   // Check if user already has categories
   const hasCategories = await userServices.checkUserHasCategories(converted_user_id);
   if (hasCategories) {
@@ -552,7 +559,7 @@ const initializeDefaultCategories = catchAsync(async (req, res) => {
     });
     return;
   }
-  
+
   const result = await userServices.createDefaultCategories(converted_user_id);
 
   globalResponseHandler(res, {
@@ -634,21 +641,21 @@ const getAllCategories = catchAsync(async (req, res) => {
   if (!converted_user_id) {
     throw Error('id conversation failed');
   }
-  
+
   // Extract query parameters for filtering
   const { type, transactionType } = req.query;
-  
+
   // Build filters object
   const filters: { type?: 'personal' | 'group'; transactionType?: 'income' | 'expense' } = {};
-  
+
   if (type && (type === 'personal' || type === 'group')) {
     filters.type = type as 'personal' | 'group';
   }
-  
+
   if (transactionType && (transactionType === 'income' || transactionType === 'expense')) {
     filters.transactionType = transactionType as 'income' | 'expense';
   }
-  
+
   const result = await userServices.getAllCategories(converted_user_id, Object.keys(filters).length > 0 ? filters : undefined);
 
   globalResponseHandler(res, {
