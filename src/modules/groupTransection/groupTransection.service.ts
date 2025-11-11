@@ -647,7 +647,6 @@ const getGroupsByUserId = async ({ userId }: { userId: mongoose.Types.ObjectId |
 
 }
 
-
 const addGroupExpense = async ({ groupId, expenseData, user_id }: { groupId: string, expenseData: any, user_id: mongoose.Types.ObjectId | null }) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -991,7 +990,6 @@ const updateGroupExpense = async ({
         session.endSession();
     }
 };
-
 
 const deleteGroupExpense = async ({ groupId, expenseId, user_id }: {
     groupId: string,
@@ -2021,9 +2019,10 @@ const getGroupTransactions = async ({
             }
             
             // Calculate current net after settlements
-            const currentNet = originalNet > 0 
-                ? originalNet - settledAmount  // If user lent, subtract what's been paid back
-                : originalNet + settledAmount; // If user borrowed, add what they've paid back
+            const currentNet = originalNet 
+            // > 0 
+            //     ? originalNet - settledAmount  // If user lent, subtract what's been paid back
+            //     : originalNet + settledAmount; // If user borrowed, add what they've paid back
 
             return {
                 _id: (expense as any)._id,
