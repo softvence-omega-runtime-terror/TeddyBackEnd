@@ -3,6 +3,7 @@ import { GroupTransactionModel } from "./groupTransection.model";
 import { ProfileModel, UserModel } from "../user/user.model";
 import { UserSubscriptionModel } from "../userSubscription/userSubscription.model";
 import { GroupSettlementHistoryModel } from "./groupSettlementHistory.model";
+import e from "express";
 
 // Simple UUID generator function
 const generateBatchId = () => {
@@ -283,7 +284,7 @@ const getGroupStatus = async ({
                     }
                 };
             }).sort((a, b) => b.involved.amount - a.involved.amount),
-            personWise: Object.keys(personBreakdown).map(email => {
+            personWise: (await Promise.all(Object.keys(personBreakdown).map(async email => {
                 const memberTotalOwes = personBreakdown[email].totalOwes; // What this member owes (their share)
                 const memberTotalPaid = personBreakdown[email].totalInvolved; // What this member paid
                 console.log(personBreakdown[email])
@@ -368,8 +369,11 @@ const getGroupStatus = async ({
                     ? (totalGroupExpenses > 0 ? (userOwesForThisPerson / totalGroupExpenses) * 100 : 0)
                     : (memberTotalOwes > 0 ? (memberTotalOwes / totalGroupExpenses) * 100 : 0);
 
+                const memberName = await ProfileModel.findOne({email: email}).select('name').lean().then(profile => profile?.name || email.split('@')[0]);
+
                 return {
                     memberEmail: email,
+                    memberName,
                     involved: {
                         currency: personBreakdown[email].currency,
                         amount: parseFloat(involvedAmountForPerson.toFixed(2)),
@@ -383,7 +387,7 @@ const getGroupStatus = async ({
                         percentage: parseFloat(myExpensePercentage.toFixed(2))
                     }
                 };
-            }).sort((a, b) => b.involved.amount - a.involved.amount),
+            }))).sort((a, b) => b.involved.amount - a.involved.amount),
             currencies: involvedCurrencies,
             lastUpdated: new Date().toISOString()
         };
@@ -1441,6 +1445,7 @@ const getGroupSettlements = async ({
             console.log('Adding current settlements to display');
             const currentSettlementsFormatted = await Promise.all(currentSettlements.map(async settlement => ({
                 ...settlement,
+                amount: Math.round(settlement.amount * 100) / 100,
                 formName: await ProfileModel.findOne({ email: settlement.from }).select('name').lean().then(user => user?.name || 'Unknown'),
                 toName: await ProfileModel.findOne({ email: settlement.to }).select('name').lean().then(user => user?.name || 'Unknown'),
                 isHistorical: false
@@ -1454,7 +1459,7 @@ const getGroupSettlements = async ({
             const recentHistoricalSettlements = await Promise.all(settlementHistory.slice(0, 5).map(async history => ({
                 from: history.fromEmail,
                 to: history.toEmail,
-                amount: history.amount,
+                amount: Math.round(history.amount * 100) / 100,
                 isHistorical: true,
                 formName: await ProfileModel.findOne({ email: history.fromEmail }).select('name').lean().then(user => user?.name || history.fromEmail),
                 toName: await ProfileModel.findOne({ email: history.toEmail }).select('name').lean().then(user => user?.name || history.toEmail),
