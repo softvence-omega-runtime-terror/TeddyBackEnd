@@ -1690,7 +1690,7 @@ const settleMultipleDebts = async ({
         // Validate all settlements before processing any
         const validationErrors: string[] = [];
 
-        settlements.forEach((settlement, index) => {
+/*         settlements.forEach((settlement, index) => {
             const { fromEmail, toEmail, amount } = settlement;
 
             const fromBalance = currentBalances[fromEmail]?.net || 0;
@@ -1712,7 +1712,7 @@ const settleMultipleDebts = async ({
             if (amount > toBalance) {
                 validationErrors.push(`Settlement ${index + 1}: amount (${amount}) cannot exceed what is owed to ${toEmail} (${toBalance})`);
             }
-        });
+        }); */
 
         if (validationErrors.length > 0) {
             throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
